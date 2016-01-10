@@ -88,11 +88,11 @@ Use it
  * ``PYTHON_PATH`` in ``SyncPlugin.py``
  * ``BROKER_PATH`` in ``SyncPlugin.py``, by default look for ``broker.py`` in current plugin path
  * ``HOST`` in ``broker.py``, localhost is the default interface.
-
- ``broker.py`` and ``sync.dll`` check for a configuration file named ``.sync`` in user's home directory.
- (IDA's side broker.py and dispatcher.py actually look for the configuration file in the IDB's
- directory first).
- Content of this file overwrite default values. It should respect a ``.ini`` file format: :::
+   
+   ``broker.py`` and ``sync.dll`` check for a configuration file named ``.sync`` in user's home directory.
+   (IDA's side broker.py and dispatcher.py actually look for the configuration file in the IDB's
+   directory first).
+   Content of this file overwrite default values. It should respect a ``.ini`` file format::
 
         [INTERFACE]
         host=127.0.0.1
@@ -103,7 +103,7 @@ Use it
 
 1. Open IDB
 
-2. IDA File->Script File -> SyncPlugin.py: :::
+2. IDA File->Script File -> SyncPlugin.py::
 
     [sync] form create
     [*] initBroker, "Y:\Python27\python.exe" -u "Y:\sync\broker.py" --idb "target.exe"
@@ -127,12 +127,13 @@ Use it
 
 3. Launch WinDbg on target
 
-4. Load extension: :::
+4. Load extension::
 
     0:000> .load sync
     [sync.dll] DebugExtensionInitialize, ExtensionApis loaded
 
-5. Sync Windbg: :::
+	
+5. Sync Windbg::
 
     0:000> !sync
     [sync] No argument found, using default host (127.0.0.1:9100)
@@ -140,7 +141,8 @@ Use it
     [sync] probing sync
     [sync] sync is now enabled with host 192.168.208.1
 
- In IDA's Output window: ::::
+	
+   In IDA's Output window::
 
     [*] << broker << dispatcher msg: new debugger client: dbg connect - HostMachine\HostUser
 
@@ -148,21 +150,22 @@ Use it
 
     [sync] idb is enabled with the idb client matching the module name.
 
+	
 6. IDA plugin's GUI
 
- "``Overwrite idb name``" input field is meant to change the default idb name. It is
- the name that is used by the plugin to register with the dispatcher.
- idb automatic switch is based on module name matching. In case of conflicting names
- (like a ``foo.exe`` and ``foo.dll``), this can be used to ease matching.
- Please note, if you modify the input field while the sync is active, you have to re-register
- with the dispatcher; this can be done simply by using the "``Restart``" button.
- 
- Please note that it is possible to alias by default using the ``.sync config`` file: :::
- 
-     [<ida_root_filename>]
-     name=<alias name>
- 
- The section name is the idb's root file name and has only one option: "``name``".
+   ``Overwrite idb name`` input field is meant to change the default idb name. It is
+   the name that is used by the plugin to register with the dispatcher.
+   idb automatic switch is based on module name matching. In case of conflicting names
+   (like a ``foo.exe`` and ``foo.dll``), this can be used to ease matching.
+   Please note, if you modify the input field while the sync is active, you have to re-register
+   with the dispatcher; this can be done simply by using the "``Restart``" button.
+   
+   Please note that it is possible to alias by default using the ``.sync config`` file::
+   
+       [<ida_root_filename>]
+       name=<alias name>
+   
+   The section name is the idb's root file name and has only one option: "``name``".
 
 
 7. Use WinDbg and enjoy IDA's activity
@@ -174,17 +177,17 @@ Extra commands
 
 * **!syncoff**
 
- Stop synchronization
+  Stop synchronization
 
 
 * **!synchelp**
 
- Display the list of available commands with short explanation.
+  Display the list of available commands with short explanation.
 
 
 * **!cmt [-a address] <string>**
 
- Add comment at current eip in IDA:::
+  Add comment at current eip in IDA:::
 
     [WinDbg]
     0:000:x86> pr
@@ -207,7 +210,7 @@ Extra commands
 
 * **!rcmt [-a address]**
  
- Reset comment at current ip in IDA:::
+  Reset comment at current ip in IDA:::
 
     [WinDbg]
     0:000:x86> !rcmt
@@ -219,7 +222,7 @@ Extra commands
 
 * **!fcmt [-a address] <string>**
 
- Add a function comment for function in which current ip is located::::
+  Add a function comment for function in which current ip is located::
 
     [WinDbg]
     0:000:x86> !fcmt decodes buffer with key
@@ -231,19 +234,19 @@ Extra commands
     .text:004012E0 decrypt_func    proc near
     .text:004012E0                 push    ebp
 
- Note: calling this command without argument reset the function's comment.
+  Note: calling this command without argument reset the function's comment.
 
 * **!raddr <expression>**
  
- Add a comment with rebased address evaluated from expression
+  Add a comment with rebased address evaluated from expression
 
 * **!rln <expression>**
 
- Get symbol from the idb for the given address
+  Get symbol from the idb for the given address
 
 * **!lbl [-a address] <string>**
 
- Add a label name at current ip in IDA:::
+  Add a label name at current ip in IDA::
 
     [WinDbg]
     0:000:x86> !lbl meaningful_label
@@ -255,7 +258,7 @@ Extra commands
 
 * **!cmd <string>**
 
- Execute a command in WinDbg and add its output as comment at current eip in IDA:::
+  Execute a command in WinDbg and add its output as comment at current eip in IDA:::
 
     [WinDbg]
     0:000:x86> pr
@@ -272,17 +275,17 @@ Extra commands
 
 * **!bc <||on|off|set 0xBBGGRR>>**
 
- Enable/disable path coloring in IDA. This is NOT a code tracing tool,
- there are efficient tools for that. Each manually stepped instruction is
- colored in the graph. Color a single instruction at current eip if called
- without argument.
- "set" argument is used to set path color with a new hex rgb code (reset color
- if called with a value > 0xFFFFFF).
+  Enable/disable path coloring in IDA. This is NOT a code tracing tool,
+  there are efficient tools for that. Each manually stepped instruction is
+  colored in the graph. Color a single instruction at current eip if called
+  without argument.
+  "set" argument is used to set path color with a new hex rgb code (reset color
+  if called with a value > 0xFFFFFF).
 
 
 * **!idblist**
  
- Get list of all IDB clients connected to the dispatcher:::
+  Get list of all IDB clients connected to the dispatcher:::
 
     [WinDbg]
     0:000> !idblist
@@ -291,7 +294,7 @@ Extra commands
 
 * **!syncmodauto <on|off>**
  
- Enable/disable idb auto switch based on module name:::
+  Enable/disable idb auto switch based on module name:::
 
     [WinDbg]
     0:000> !syncmodauto off
@@ -302,62 +305,62 @@ Extra commands
 
 * **!idbn <n>**
 
- Set active idb to the nth client. n should be a valid decimal value.
- This is a semi-automatic mode (personal tribute to the tremendous jj).:::
+  Set active idb to the nth client. n should be a valid decimal value.
+  This is a semi-automatic mode (personal tribute to the tremendous jj).::
 
     [WinDbg]
     0:000:> !idbn 0
     > current idb set to 0
 
- In this example, current active idb client would have been set to::::
+  In this example, current active idb client would have been set to::
  
 	[0] target.exe.
 
 
 * **!jmpto <expression>**
  
- Expression given as argument is evaluated in the context of the current debugger's status.
- IDA's view is then synced with the resulting address if a matching module is registered.
- Can be seen as a manual synching, relocation is automatically performed, on the fly.
- Especially useful for randomly relocated binary.
+  Expression given as argument is evaluated in the context of the current debugger's status.
+  IDA's view is then synced with the resulting address if a matching module is registered.
+  Can be seen as a manual synching, relocation is automatically performed, on the fly.
+  Especially useful for randomly relocated binary.
 
 
 * **!jmpraw <expression>**
 
- Expression given as argument is evaluated in the context of the current debugger's status.
- If an idb is enable then IDA's view is synced with the resulting address. Address is not rebased
- and there is no idb switching.
- Especially useful for dynamically allocated/generated code.
-
+  Expression given as argument is evaluated in the context of the current debugger's status.
+  If an idb is enable then IDA's view is synced with the resulting address. Address is not rebased
+  and there is no idb switching.
+  Especially useful for dynamically allocated/generated code.
+  
 * **!modmap <base> <size> <name>**
 
- A synthetic ("faked") module (defined using its base address and size) is added to the debugger internal list.
- From msdn: "If all the modules are reloaded - for example, by calling Reload with the Module parameter set to an empty string - all synthetic modules will be discarded."
- It can be used to more easily debug dynamically allocated/generated code.
-
+  A synthetic ("faked") module (defined using its base address and size) is added to the debugger internal list.
+  From msdn: "If all the modules are reloaded - for example, by calling Reload with the Module parameter set to an empty string - all synthetic modules will be discarded."
+  It can be used to more easily debug dynamically allocated/generated code.
+  
 * **!modunmap <base>**
 
- Remove a previously mapped synthetic module at base address.
+  Remove a previously mapped synthetic module at base address.
 
 * **!modcheck <||md5>**
 
- Use to check if current module really matches IDB's file (ex: module has been updated)
- When call without argument, pdb's GUID from Debug Directory is used. It can also use md5,
- but only with local debuggee (not in remote kernel debugging).
+  Use to check if current module really matches IDB's file (ex: module has been updated)
+  When call without argument, pdb's GUID from Debug Directory is used. It can also use md5,
+  but only with local debuggee (not in remote kernel debugging).
 
 * **!bpcmds <||save|load|>**
   
-  **bpcmds** wrapper, save and reload **.bpcmds** (breakpoints commands list) output to current idb. 
-  Display (but not execute) saved data if called with no argument. 
-  Persistent storage is achieved using IDA's netnode feature.
+   **bpcmds** wrapper, save and reload **.bpcmds** (breakpoints commands list) output to current idb. 
+   Display (but not execute) saved data if called with no argument. 
+   Persistent storage is achieved using IDA's netnode feature.
 
 * **!ks**
 
- This command is a DML enhanced output of 'kv' command. Code Addresses are clickable (!jmpto) as well as data addresses (dc).
+  This command is a DML enhanced output of 'kv' command. Code Addresses are clickable (!jmpto) as well as data addresses (dc).
 
 * **!translate <base> <addr> <mod>**
 
- Meant to be used from IDA (Alt-F2 shortcut), rebase an address with respect to its module's name and offset.
+  Meant to be used from IDA (Alt-F2 shortcut), rebase an address with respect to its module's name and offset.
 
 
 Address optional argument
@@ -365,7 +368,7 @@ Address optional argument
 
 !cmt, !rcmt and !fcmt commands support an optional address option: -a or --address.
 Address should be passed as an hexadecimal value. Command parsing is based on python's
-module argparse. To stop line parsing use ``--``.:::
+module argparse. To stop line parsing use ``--``.::
 
     [WinDbg]
     0:000:x86> !cmt -a 0x430DB2 comment
@@ -377,7 +380,7 @@ The address has to be a valid instruction's address.
 IDA bindings over Windbg commands:
 ----------------------------------
 
-Syncplugin.py also registers Windbg command wrapper hotkeys.
+``Syncplugin.py`` also registers Windbg command wrapper hotkeys.
 
 * F2  - Set breakpoint at cursor address
 * F3  - Set one-shot breakpoint at cursor address
@@ -396,14 +399,14 @@ GNU gdb (GDB)
 
 GDB support is experimental, however:
 
-0. Load extension (see auto-load-scripts):::
+0. Load extension (see auto-load-scripts)::
 
     gdb> source sync.py
     [sync] configuration file loaded 192.168.52.1:9100
     [sync] commands added
 
 
-1. Sync with host:::
+1. Sync with host::
 
     gdb> sync
     [sync] sync is now enabled with host 192.168.52.1
@@ -414,7 +417,7 @@ GDB support is experimental, however:
     [Thread debugging using libthread_db enabled]
     Using host libthread_db library "/lib/libthread_db.so.1".
 
-2. Use commands, WITHOUT "!" PREFIX:::
+2. Use commands, **without "!" prefix**::
 
     (gdb) cmd x/i $pc
     [sync] command output: => 0x8049ca3:    push   edi
@@ -435,11 +438,11 @@ LLDB
 
 LLDB support is experimental, however:
 
-0. Load extension (can also be added in ~/.lldbinit):::
+0. Load extension (can also be added in ~/.lldbinit)::
 
     lldb> command script import sync
 
-1. Sync with host:::
+1. Sync with host::
 
     lldb> process launch -s
     lldb> sync
@@ -447,7 +450,7 @@ LLDB support is experimental, however:
     [sync] sync is now enabled with host localhost
     [sync] event handler started
 
-2. Use commands:::
+2. Use commands::
 
     lldb> synchelp
     [sync] extension commands help:
@@ -498,7 +501,7 @@ Based on testplugin,  https://github.com/x64dbg/testplugin. x64dbg support is ex
 Extend
 ------
 
-While mostly focus on IDA as analysis back-end it is of-source possible to use other tools, see:
+While mostly focus on dynamic analysis, it is of-course possible to use other tools, see:
 
 - http://blog.tetrane.com/2015/02/reven-in-your-toolkit.html
 
