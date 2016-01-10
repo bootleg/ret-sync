@@ -42,14 +42,16 @@ Content
 
 - ``ext_ida/SyncPlugin.py``: IDA plugin, receive async events from broker
 - ``ext_ida/broker.py``:
-    * bind a socket on a random port
-    * connect to dispatcher
-    * just a socket->stdout event pump
+
+  * bind a socket on a random port
+  * connect to dispatcher
+  * just a socket->stdout event pump
 
 - ``ext_ida/dispatcher.py``:
-    * bind a TCP socket on localhost:9100 by default (see "Configuration file"),
-    * receive events from a debugger
-    * dispatch events to appropriate idb through their broker
+
+  * bind a TCP socket on localhost:9100 by default (see "Configuration file"),
+  * receive events from a debugger
+  * dispatch events to appropriate idb through their broker
 
 
 
@@ -85,10 +87,10 @@ Use it
 
 0. If necessary, set:
 
- * ``PYTHON_PATH`` in ``SyncPlugin.py``
- * ``BROKER_PATH`` in ``SyncPlugin.py``, by default look for ``broker.py`` in current plugin path
- * ``HOST`` in ``broker.py``, localhost is the default interface.
-   
+   * ``PYTHON_PATH`` in ``SyncPlugin.py``
+   * ``BROKER_PATH`` in ``SyncPlugin.py``, by default look for ``broker.py`` in current plugin path
+   * ``HOST`` in ``broker.py``, localhost is the default interface.
+     
    ``broker.py`` and ``sync.dll`` check for a configuration file named ``.sync`` in user's home directory.
    (IDA's side broker.py and dispatcher.py actually look for the configuration file in the IDB's
    directory first).
@@ -98,7 +100,7 @@ Use it
         host=127.0.0.1
         port=9100
 
- (This file is not created by default)
+   (This file is not created by default)
 
 
 1. Open IDB
@@ -350,9 +352,9 @@ Extra commands
 
 * **!bpcmds <||save|load|>**
   
-   **bpcmds** wrapper, save and reload **.bpcmds** (breakpoints commands list) output to current idb. 
-   Display (but not execute) saved data if called with no argument. 
-   Persistent storage is achieved using IDA's netnode feature.
+  **bpcmds** wrapper, save and reload **.bpcmds** (breakpoints commands list) output to current idb. 
+  Display (but not execute) saved data if called with no argument. 
+  Persistent storage is achieved using IDA's netnode feature.
 
 * **!ks**
 
@@ -552,7 +554,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
+along with this program.  If not, see http://www.gnu.org/licenses/.
 
 
 GREETZ

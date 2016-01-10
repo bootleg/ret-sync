@@ -23,6 +23,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import os.path as altpath
 import sys
 import socket
 import select
@@ -73,7 +74,6 @@ class DispatcherSrv():
     def __init__(self):
         self.idb_clients = []
         self.dbg_client = None
-
         self.srv_socks = []
         self.opened_socks = []
 
@@ -302,6 +302,10 @@ class DispatcherSrv():
                     s.close()
                 sys.exit()
 
+    # determine if debugger is Windows specific
+    def is_windows_dbg(self, dialect):
+        return (dialect in ['windbg', 'x64_dbg', 'ollydbg2'])
+
     # a new debugger client connects to the dispatcher
     def req_new_dbg(self, s, hash):
         msg = hash['msg']
@@ -312,11 +316,20 @@ class DispatcherSrv():
         self.current_dbg = self.sock_to_client(s)
         self.current_dbg.client_sock = s
         self.idb_clients.remove(self.current_dbg)
+
+        print hash
         self.broadcast("new debugger client: %s" % msg)
 
         # store dbb's dialect
         if 'dialect' in hash:
             self.current_dialect = hash['dialect']
+
+            # case when IDA is on a linux/bsd host and connected to remote windows
+            # use ntpath instead of posixpath
+            if sys.platform.startswith('linux') or sys.platform == 'darwin':
+                if self.is_windows_dbg(self.current_dialect):
+                    global altpath
+                    import ntpath as altpath
 
         self.dbg_dialect()
 
@@ -381,7 +394,7 @@ class DispatcherSrv():
     # dbg notice that its current module has changed
     def req_module(self, s, hash):
         modpath = hash['path']
-        self.current_module = modname = os.path.basename(modpath)
+        self.current_module = modname = altpath.basename(modpath)
         matching = [idbc for idbc in self.idb_clients if (idbc.name.lower() == modname.lower())]
 
         if not self.sync_mode_auto:
