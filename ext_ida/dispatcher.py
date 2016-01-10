@@ -317,7 +317,6 @@ class DispatcherSrv():
         self.current_dbg.client_sock = s
         self.idb_clients.remove(self.current_dbg)
 
-        print hash
         self.broadcast("new debugger client: %s" % msg)
 
         # store dbb's dialect
