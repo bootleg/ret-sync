@@ -43,6 +43,7 @@ except:
 import idaapi
 import idautils
 from idaapi import PluginForm
+import idc
 
 
 if sys.platform == 'win32':
@@ -982,7 +983,7 @@ class SyncForm_t(PluginForm):
         print "[*] init broker,", cmdline
 
         self.broker = Broker(self.parser)
-        env = QProcessEnvironment.systemEnvironment()
+        env = QtCore.QProcessEnvironment.systemEnvironment()
         env.insert("IDB_PATH", IDB_PATH)
         env.insert("PYTHON_PATH", os.path.realpath(PYTHON_PATH))
         env.insert("PYTHON_BIN", PYTHON_BIN)
@@ -1050,15 +1051,16 @@ class SyncForm_t(PluginForm):
     def OnCreate(self, form):
         print "[sync] form create"
 
+        self.hotkeys_ctx = []
+        self.broker = None
+
         # Get parent widget
-        # parent = self.FormToPyQtWidget(form)
         parent = sark.qt.form_to_widget(form)
 
         # Create checkbox
         self.cb = QtWidgets.QCheckBox("Synchronization enable")
         self.cb.move(20, 20)
-        sark.qt.connect_method_to_signal(self.cb, "StateChanged(int)", self.cb_change_state)
-        # self.cb.stateChanged.connect(self.cb_change_state)
+        sark.qt.connect_method_to_signal(self.cb, "stateChanged(int)", self.cb_change_state)
 
         # Create label
         label = QtWidgets.QLabel('Overwrite idb name:')
@@ -1082,7 +1084,7 @@ class SyncForm_t(PluginForm):
         # Create restart button
         self.btn = QtWidgets.QPushButton('restart', parent)
         self.btn.setToolTip('Restart broker.')
-        self.btn.clicked.connect(self.cb_btn_restart)
+        sark.qt.connect_method_to_signal(self.btn, 'clicked()', self.cb_btn_restart)
 
         # Create layout
         layout = QtWidgets.QGridLayout()
