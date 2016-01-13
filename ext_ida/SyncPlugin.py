@@ -32,6 +32,7 @@ import base64
 import ctypes
 import socket
 import ConfigParser
+import sark.qt
 
 try:
     import argparse
@@ -42,6 +43,7 @@ except:
 import idaapi
 import idautils
 from idaapi import PluginForm
+import idc
 
 
 if sys.platform == 'win32':
@@ -66,8 +68,7 @@ if not site_packages in sys.path:
     sys.path.insert(0, site_packages)
 
 try:
-    from PyQt5 import QtCore, QtWidgets
-    from PyQt5.QtCore import QProcess, QProcessEnvironment
+    from sark.qt import QtCore, QtWidgets, use_qt5
 except:
     print "[-] failed to import Qt libs from PyQt5\n%s" % repr(sys.exc_info())
     sys.exit(0)
@@ -745,7 +746,10 @@ class Broker(QtCore.QProcess):
 
     def cb_broker_on_out(self):
         # readAllStandardOutput() returns QByteArray
-        buffer = self.readAllStandardOutput().data().encode("ascii")
+        if use_qt5:
+            buffer = self.readAllStandardOutput().data().encode("ascii")
+        else:
+            buffer = self.readAll().data().encode("ascii")
         batch = buffer.split('\n')
         for req in batch:
             self.worker.parse_exec(req)
@@ -753,9 +757,9 @@ class Broker(QtCore.QProcess):
     def __init__(self, parser):
         QtCore.QProcess.__init__(self)
 
-        self.error.connect(self.cb_on_error)
-        self.readyReadStandardOutput.connect(self.cb_broker_on_out)
-        self.stateChanged.connect(self.cb_broker_on_state_change)
+        sark.qt.connect_method_to_signal(self, 'error(QProcess::ProcessError)', self.cb_on_error)
+        sark.qt.connect_method_to_signal(self, 'readyReadStandardOutput()', self.cb_broker_on_out)
+        sark.qt.connect_method_to_signal(self, 'stateChanged(ProcessState)', self.cb_broker_on_state_change)
 
         # Create a request handler
         self.worker = RequestHandler(parser)
@@ -982,14 +986,14 @@ class SyncForm_t(PluginForm):
         print "[*] init broker,", cmdline
 
         self.broker = Broker(self.parser)
-        env = QProcessEnvironment.systemEnvironment()
+        env = QtCore.QProcessEnvironment.systemEnvironment()
         env.insert("IDB_PATH", IDB_PATH)
         env.insert("PYTHON_PATH", os.path.realpath(PYTHON_PATH))
         env.insert("PYTHON_BIN", PYTHON_BIN)
 
         try:
-            self.broker.started.connect(self.cb_broker_started)
-            self.broker.finished.connect(self.cb_broker_finished)
+            sark.qt.connect_method_to_signal(self.broker, 'started()', self.cb_broker_started)
+            sark.qt.connect_method_to_signal(self.broker, 'finished(int)', self.cb_broker_finished)
             self.broker.setProcessEnvironment(env)
             self.broker.start(cmdline)
         except Exception as e:
@@ -1050,13 +1054,16 @@ class SyncForm_t(PluginForm):
     def OnCreate(self, form):
         print "[sync] form create"
 
+        self.hotkeys_ctx = []
+        self.broker = None
+
         # Get parent widget
-        parent = self.FormToPyQtWidget(form)
+        parent = sark.qt.form_to_widget(form)
 
         # Create checkbox
         self.cb = QtWidgets.QCheckBox("Synchronization enable")
         self.cb.move(20, 20)
-        self.cb.stateChanged.connect(self.cb_change_state)
+        sark.qt.connect_method_to_signal(self.cb, "stateChanged(int)", self.cb_change_state)
 
         # Create label
         label = QtWidgets.QLabel('Overwrite idb name:')
@@ -1080,7 +1087,7 @@ class SyncForm_t(PluginForm):
         # Create restart button
         self.btn = QtWidgets.QPushButton('restart', parent)
         self.btn.setToolTip('Restart broker.')
-        self.btn.clicked.connect(self.cb_btn_restart)
+        sark.qt.connect_method_to_signal(self.btn, 'clicked()', self.cb_btn_restart)
 
         # Create layout
         layout = QtWidgets.QGridLayout()
