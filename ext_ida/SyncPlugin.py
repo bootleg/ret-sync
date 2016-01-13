@@ -32,6 +32,7 @@ import base64
 import ctypes
 import socket
 import ConfigParser
+import sark.qt
 
 try:
     import argparse
@@ -66,8 +67,7 @@ if not site_packages in sys.path:
     sys.path.insert(0, site_packages)
 
 try:
-    from PyQt5 import QtCore, QtWidgets
-    from PyQt5.QtCore import QProcess, QProcessEnvironment
+    from sark.qt import QtCore, QtWidgets
 except:
     print "[-] failed to import Qt libs from PyQt5\n%s" % repr(sys.exc_info())
     sys.exit(0)
@@ -1051,12 +1051,14 @@ class SyncForm_t(PluginForm):
         print "[sync] form create"
 
         # Get parent widget
-        parent = self.FormToPyQtWidget(form)
+        # parent = self.FormToPyQtWidget(form)
+        parent = sark.qt.form_to_widget(form)
 
         # Create checkbox
         self.cb = QtWidgets.QCheckBox("Synchronization enable")
         self.cb.move(20, 20)
-        self.cb.stateChanged.connect(self.cb_change_state)
+        sark.qt.connect_method_to_signal(self.cb, "StateChanged(int)", self.cb_change_state)
+        # self.cb.stateChanged.connect(self.cb_change_state)
 
         # Create label
         label = QtWidgets.QLabel('Overwrite idb name:')
