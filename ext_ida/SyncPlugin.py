@@ -68,7 +68,7 @@ if not site_packages in sys.path:
     sys.path.insert(0, site_packages)
 
 try:
-    from sark.qt import QtCore, QtWidgets
+    from sark.qt import QtCore, QtWidgets, use_qt5
 except:
     print "[-] failed to import Qt libs from PyQt5\n%s" % repr(sys.exc_info())
     sys.exit(0)
@@ -746,7 +746,10 @@ class Broker(QtCore.QProcess):
 
     def cb_broker_on_out(self):
         # readAllStandardOutput() returns QByteArray
-        buffer = self.readAllStandardOutput().data().encode("ascii")
+        if use_qt5:
+            buffer = self.readAllStandardOutput().data().encode("ascii")
+        else:
+            buffer = self.readAll().data().encode("ascii")
         batch = buffer.split('\n')
         for req in batch:
             self.worker.parse_exec(req)
@@ -754,9 +757,9 @@ class Broker(QtCore.QProcess):
     def __init__(self, parser):
         QtCore.QProcess.__init__(self)
 
-        self.error.connect(self.cb_on_error)
-        self.readyReadStandardOutput.connect(self.cb_broker_on_out)
-        self.stateChanged.connect(self.cb_broker_on_state_change)
+        sark.qt.connect_method_to_signal(self, 'error(QProcess::ProcessError)', self.cb_on_error)
+        sark.qt.connect_method_to_signal(self, 'readyReadStandardOutput()', self.cb_broker_on_out)
+        sark.qt.connect_method_to_signal(self, 'stateChanged(ProcessState)', self.cb_broker_on_state_change)
 
         # Create a request handler
         self.worker = RequestHandler(parser)
@@ -989,8 +992,8 @@ class SyncForm_t(PluginForm):
         env.insert("PYTHON_BIN", PYTHON_BIN)
 
         try:
-            self.broker.started.connect(self.cb_broker_started)
-            self.broker.finished.connect(self.cb_broker_finished)
+            sark.qt.connect_method_to_signal(self.broker, 'started()', self.cb_broker_started)
+            sark.qt.connect_method_to_signal(self.broker, 'finished(int)', self.cb_broker_finished)
             self.broker.setProcessEnvironment(env)
             self.broker.start(cmdline)
         except Exception as e:
