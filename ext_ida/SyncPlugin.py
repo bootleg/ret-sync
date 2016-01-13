@@ -32,6 +32,7 @@ import base64
 import ctypes
 import socket
 import ConfigParser
+import idc
 
 try:
     import argparse
