@@ -43,7 +43,7 @@ import idaapi
 import idautils
 from idaapi import PluginForm
 import idc
-import sark.qt
+import cute
 
 if sys.platform == 'win32':
     PYTHON_BIN = 'python.exe'
@@ -66,7 +66,7 @@ if not site_packages in sys.path:
     sys.path.insert(0, site_packages)
 
 try:
-    from sark.qt import QtCore, QtWidgets, use_qt5
+    from cute import QtCore, QtWidgets, use_qt5
 except:
     print "[-] failed to import Qt libs from PyQt5\n%s" % repr(sys.exc_info())
     sys.exit(0)
@@ -199,7 +199,7 @@ class RequestHandler(object):
 
     # demangle names
     def demangle(self, name):
-        mask = idc.GetLongPrm(INF_SHORT_DN)
+        mask = idc.GetLongPrm(idc.INF_SHORT_DN)
         demangled = idc.Demangle(name, mask)
         if demangled is None:
             return name
@@ -757,9 +757,9 @@ class Broker(QtCore.QProcess):
     def __init__(self, parser, form):
         QtCore.QProcess.__init__(self)
 
-        sark.qt.connect_method_to_signal(self, 'error(QProcess::ProcessError)', self.cb_on_error)
-        sark.qt.connect_method_to_signal(self, 'readyReadStandardOutput()', self.cb_broker_on_out)
-        sark.qt.connect_method_to_signal(self, 'stateChanged(ProcessState)', self.cb_broker_on_state_change)
+        cute.connect(self, 'error(QProcess::ProcessError)', self.cb_on_error)
+        cute.connect(self, 'readyReadStandardOutput()', self.cb_broker_on_out)
+        cute.connect(self, 'stateChanged(ProcessState)', self.cb_broker_on_state_change)
 
         # Create a request handler
         self.worker = RequestHandler(parser, form)
@@ -773,8 +773,8 @@ class DbgDirHlpr(object):
     def read_rsds_codeview():
         guid = None
         penode = idaapi.netnode()
-        penode.create(peutils_t.PE_NODE)
-        fpos = penode.altval(peutils_t.PE_ALT_DBG_FPOS)
+        penode.create(idautils.peutils_t.PE_NODE)
+        fpos = penode.altval(idautils.peutils_t.PE_ALT_DBG_FPOS)
 
         if (fpos == 0):
             print "[*] No debug directory"
@@ -958,9 +958,9 @@ class SyncForm_t(PluginForm):
         print "[*] broker finished"
         if self.broker:
             self.broker.worker.stop()
-            self.cb.stateChanged.disconnect(self.cb_change_state)
+            cute.disconnect(self.cb, 'stateChanged(int)', self.cb_change_state)
             self.cb.toggle()
-            self.cb.stateChanged.connect(self.cb_change_state)
+            cute.connect(self.cb, 'stateChanged(int)', self.cb_broker_started)
 
         self.btn.setText("Start")
 
@@ -990,8 +990,8 @@ class SyncForm_t(PluginForm):
         env.insert("PYTHON_BIN", PYTHON_BIN)
 
         try:
-            sark.qt.connect_method_to_signal(self.broker, 'started()', self.cb_broker_started)
-            sark.qt.connect_method_to_signal(self.broker, 'finished(int)', self.cb_broker_finished)
+            cute.connect(self.broker, 'started()', self.cb_broker_started)
+            cute.connect(self.broker, 'finished(int)', self.cb_broker_finished)
             self.broker.setProcessEnvironment(env)
             self.broker.start(cmdline)
         except Exception as e:
@@ -1056,12 +1056,12 @@ class SyncForm_t(PluginForm):
         self.broker = None
 
         # Get parent widget
-        parent = sark.qt.form_to_widget(form)
+        parent = cute.form_to_widget(form)
 
         # Create checkbox
         self.cb = QtWidgets.QCheckBox("Synchronization enable")
         self.cb.move(20, 20)
-        sark.qt.connect_method_to_signal(self.cb, "stateChanged(int)", self.cb_change_state)
+        cute.connect(self.cb, "stateChanged(int)", self.cb_change_state)
 
         # Create label
         label = QtWidgets.QLabel('Overwrite idb name:')
@@ -1085,7 +1085,7 @@ class SyncForm_t(PluginForm):
         # Create restart button
         self.btn = QtWidgets.QPushButton('restart', parent)
         self.btn.setToolTip('Restart broker.')
-        sark.qt.connect_method_to_signal(self.btn, 'clicked()', self.cb_btn_restart)
+        cute.connect(self.btn, 'clicked()', self.cb_btn_restart)
 
         # Create layout
         layout = QtWidgets.QGridLayout()
