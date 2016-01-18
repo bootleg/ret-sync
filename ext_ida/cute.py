@@ -1,4 +1,12 @@
 '''
+Cute - a crossQt compatibility module for IDAPython.
+
+Feel free to copy this code into your own projects.
+
+Latest version can be found at https://github.com/tmr232/Cute
+
+
+
 The MIT License (MIT)
 
 Copyright (c) 2015 Tamir Bahar
