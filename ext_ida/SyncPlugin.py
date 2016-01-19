@@ -1255,7 +1255,8 @@ class RetSync(idaapi.plugin_t):
     wanted_hotkey = ""
 
     def init(self):
-        action_desc = idaapi.action_desc_t(SYNC_ACTION_NAME, 'Ret-Sync', SyncHandler(), '',
+        self.handler = SyncHandler()
+        action_desc = idaapi.action_desc_t(SYNC_ACTION_NAME, 'Ret-Sync', self.handler, '',
                                            'Enable/Disable Debugger Sync', SYNC_OFF_ICON)
         idaapi.register_action(action_desc)
         idaapi.attach_action_to_toolbar('DebugToolBar', SYNC_ACTION_NAME)
@@ -1263,6 +1264,7 @@ class RetSync(idaapi.plugin_t):
 
     def term(self):
         idaapi.detach_action_from_toolbar('DebugToolBar', SYNC_ACTION_NAME)
+        self.handler.smooth_kill()
 
     def run(self, arg):
         pass
