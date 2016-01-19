@@ -43,7 +43,6 @@ except:
 
 import idaapi
 import idautils
-from idaapi import PluginForm
 import idc
 import cute
 
@@ -692,7 +691,7 @@ class RequestHandler(object):
         try:
             self.broker_sock.sendall(notice)
         except:
-            None
+            pass
 
     def stop(self):
         if self.broker_sock:
@@ -836,13 +835,10 @@ class DbgDirHlpr(object):
 
 class GraphManager():
     def __init__(self):
-        idaname = "ida64" if __EA64__ else "ida"
+        idaname = "ida64" if idc.__EA64__ else "ida"
+        dll = ctypes.CDLL(None)
         if sys.platform == "win32":
             dll = ctypes.windll[idaname + ".wll"]
-        elif sys.platform == "linux2":
-            dll = ctypes.CDLL(None)
-        elif sys.platform == "darwin":
-            dll = ctypes.CDLL(None)
 
         # -------
 
@@ -955,179 +951,6 @@ class GraphManager():
 # --------------------------------------------------------------------------
 
 
-class SyncForm_t(PluginForm):
-    def cb_broker_started(self):
-        print "[*] broker started"
-        self.btn.setText("Restart")
-
-    def cb_broker_finished(self):
-        print "[*] broker finished"
-        if self.broker:
-            self.broker.worker.stop()
-            cute.disconnect(self.cb, 'stateChanged(int)', self.cb_change_state)
-            self.cb.toggle()
-            cute.connect(self.cb, 'stateChanged(int)', self.cb_broker_started)
-
-        self.btn.setText("Start")
-
-    # send a kill notice to the broker
-    # wait at most 2sec for him to gently kill itself
-    def smooth_kill(self):
-        self.uninit_hotkeys()
-        if self.broker:
-            broker = self.broker
-            self.broker = None
-            broker.worker.cb_restore_last_line()
-            broker.worker.kill_notice()
-            broker.waitForFinished(1500)
-
-    def init_broker(self):
-        print "[*] init_broker"
-        modname = self.input.text().encode('ascii', 'replace')
-        cmdline = u"\"%s\" -u \"%s\" --idb \"%s\"" % (
-            os.path.join(PYTHON_PATH, PYTHON_BIN),
-            BROKER_PATH, modname)
-        print "[*] init broker,", cmdline
-
-        self.broker = Broker(self.parser, self)
-        env = QtCore.QProcessEnvironment.systemEnvironment()
-        env.insert("IDB_PATH", IDB_PATH)
-        env.insert("PYTHON_PATH", os.path.realpath(PYTHON_PATH))
-        env.insert("PYTHON_BIN", PYTHON_BIN)
-
-        try:
-            cute.connect(self.broker, 'started()', self.cb_broker_started)
-            cute.connect(self.broker, 'finished(int)', self.cb_broker_finished)
-            self.broker.setProcessEnvironment(env)
-            self.broker.start(cmdline)
-        except Exception as e:
-            print "[-] failed to start broker: %s\n%s" % (str(e), traceback.format_exc())
-            return
-
-        self.init_hotkeys()
-        self.broker.worker.name = modname
-
-    def init_hotkeys(self):
-        if not self.hotkeys_ctx:
-            self.init_single_hotkey("F2", self.broker.worker.bp_notice)
-            self.init_single_hotkey("F3", self.broker.worker.bp_oneshot_notice)
-            self.init_single_hotkey("Ctrl-F2", self.broker.worker.hbp_notice)
-            self.init_single_hotkey("Ctrl-F3", self.broker.worker.hbp_oneshot_notice)
-            self.init_single_hotkey("Ctrl-F1", self.broker.worker.export_bp_notice)
-            self.init_single_hotkey("Alt-F2", self.broker.worker.translate_notice)
-            self.init_single_hotkey("F5", self.broker.worker.go_notice)
-            self.init_single_hotkey("F10", self.broker.worker.so_notice)
-            self.init_single_hotkey("F11", self.broker.worker.si_notice)
-
-    def init_single_hotkey(self, key, fnCb):
-        ctx = idaapi.add_hotkey(key, fnCb)
-        if ctx is None:
-            print("[sync] failed to register hotkey %s", key)
-            del ctx
-        else:
-            self.hotkeys_ctx.append(ctx)
-
-    def uninit_hotkeys(self):
-        if not self.hotkeys_ctx:
-            return
-
-        for ctx in self.hotkeys_ctx:
-            if idaapi.del_hotkey(ctx):
-                del ctx
-
-        self.hotkeys_ctx = []
-
-    def cb_btn_restart(self):
-        print "[sync] restarting broker."
-        if self.cb.checkState() == QtCore.Qt.Checked:
-            self.cb.toggle()
-            time.sleep(0.1)
-        self.cb.toggle()
-
-    def cb_change_state(self, state):
-        if state == QtCore.Qt.Checked:
-            print "[*] sync enabled"
-            # Restart broker
-            self.hotkeys_ctx = []
-            self.init_broker()
-        else:
-            if self.broker:
-                self.smooth_kill()
-            print "[*] sync disabled\n"
-
-    def OnCreate(self, form):
-        print "[sync] form create"
-
-        self.hotkeys_ctx = []
-        self.broker = None
-
-        # Get parent widget
-        parent = cute.form_to_widget(form)
-
-        # Create checkbox
-        self.cb = QtWidgets.QCheckBox("Synchronization enable")
-        self.cb.move(20, 20)
-        cute.connect(self.cb, "stateChanged(int)", self.cb_change_state)
-
-        # Create label
-        label = QtWidgets.QLabel('Overwrite idb name:')
-
-        # Check in conf for name overwrite
-        name = idaapi.get_root_filename()
-        confpath = os.path.join(os.path.realpath(IDB_PATH), '.sync')
-        if os.path.exists(confpath):
-            config = ConfigParser.SafeConfigParser()
-            config.read(confpath)
-            if config.has_option(name, 'name'):
-                name = config.get(name, 'name')
-                print "[sync] overwrite idb name with %s" % name
-
-        # Create input field
-        self.input = QtWidgets.QLineEdit(parent)
-        self.input.setText(name)
-        self.input.setMaxLength = 256
-        self.input.setFixedWidth(300)
-
-        # Create restart button
-        self.btn = QtWidgets.QPushButton('restart', parent)
-        self.btn.setToolTip('Restart broker.')
-        cute.connect(self.btn, 'clicked()', self.cb_btn_restart)
-
-        # Create layout
-        layout = QtWidgets.QGridLayout()
-        layout.addWidget(self.cb)
-        layout.addWidget(label)
-        layout.addWidget(self.input)
-        layout.addWidget(self.btn, 2, 2)
-        layout.setColumnStretch(3, 1)
-        layout.setRowStretch(3, 1)
-        parent.setLayout(layout)
-
-        # workaround: crash when instanciated in Broker.__init__
-        # weird interaction with Qtxxx libraries ?
-        #  File "C:\Python27\Lib\argparse.py", line 1584, in __init__
-        #    self._positionals = add_group(_('positional arguments'))
-        #  File "C:\Python27\Lib\gettext.py", line 566, in gettext
-        #    return dgettext(_current_domain, message)
-        #  TypeError: 'NoneType' object is not callable
-        self.parser = argparse.ArgumentParser()
-        self.parser.add_argument("-a", "--address", nargs=1, action='store')
-        self.parser.add_argument('msg', nargs=argparse.REMAINDER)
-
-        # Synchronization is enabled by default
-        self.cb.toggle()
-
-    def OnClose(self, form):
-        print "[sync] form close"
-        self.smooth_kill()
-
-    def Show(self):
-        return PluginForm.Show(self, "ret-sync", options=PluginForm.FORM_PERSIST)
-
-
-# --------------------------------------------------------------------------
-
-
 
 class SyncHandler(idaapi.action_handler_t):
     def __init__(self):
@@ -1146,7 +969,6 @@ class SyncHandler(idaapi.action_handler_t):
 
         self.hotkeys_ctx = []
         self.broker = None
-
 
     def smooth_kill(self):
         self.uninit_hotkeys()
