@@ -19,7 +19,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-#!/usr/bin/env python
+# !/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 import os
@@ -32,6 +32,8 @@ import base64
 import ctypes
 import socket
 import ConfigParser
+
+SYNC_ACTION_NAME = 're-sync:sync-button:action'
 
 try:
     import argparse
@@ -107,6 +109,10 @@ DBG_DIALECTS = {
     'x64_dbg': {'prefix': '', 'si': 'sti', 'so': 'sto', 'go': 'go', 'bp': 'bp ', 'hbp': 'bph ', 'bp1': 'xxx ',
                 'hbp1': 'xxx '},
 }
+
+# TODO: The icons need to be released on termination.
+SYNC_ON_ICON = idaapi.load_custom_icon(os.path.join(os.path.dirname(__file__), 'sync_on.png'))
+SYNC_OFF_ICON = idaapi.load_custom_icon(os.path.join(os.path.dirname(__file__), 'sync_off.png'))
 
 
 # --------------------------------------------------------------------------
@@ -979,8 +985,8 @@ class SyncForm_t(PluginForm):
         print "[*] init_broker"
         modname = self.input.text().encode('ascii', 'replace')
         cmdline = u"\"%s\" -u \"%s\" --idb \"%s\"" % (
-                  os.path.join(PYTHON_PATH, PYTHON_BIN),
-                  BROKER_PATH, modname)
+            os.path.join(PYTHON_PATH, PYTHON_BIN),
+            BROKER_PATH, modname)
         print "[*] init broker,", cmdline
 
         self.broker = Broker(self.parser, self)
@@ -1121,6 +1127,126 @@ class SyncForm_t(PluginForm):
 
 # --------------------------------------------------------------------------
 
+
+
+class SyncHandler(idaapi.action_handler_t):
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+        self.sync_on = False
+        self.name = None
+        name = idaapi.get_root_filename()
+        confpath = os.path.join(os.path.realpath(IDB_PATH), '.sync')
+        if os.path.exists(confpath):
+            config = ConfigParser.SafeConfigParser()
+            config.read(confpath)
+            if config.has_option(name, 'name'):
+                name = config.get(name, 'name')
+                print "[sync] overwrite idb name with %s" % name
+        self.name = name
+
+        self.hotkeys_ctx = []
+        self.broker = None
+
+
+    def smooth_kill(self):
+        self.uninit_hotkeys()
+        if self.broker:
+            broker = self.broker
+            self.broker = None
+            broker.worker.cb_restore_last_line()
+            broker.worker.kill_notice()
+            broker.waitForFinished(1500)
+
+    def init_hotkeys(self):
+        if not self.hotkeys_ctx:
+            self.init_single_hotkey("F2", self.broker.worker.bp_notice)
+            self.init_single_hotkey("F3", self.broker.worker.bp_oneshot_notice)
+            self.init_single_hotkey("Ctrl-F2", self.broker.worker.hbp_notice)
+            self.init_single_hotkey("Ctrl-F3", self.broker.worker.hbp_oneshot_notice)
+            self.init_single_hotkey("Ctrl-F1", self.broker.worker.export_bp_notice)
+            self.init_single_hotkey("Alt-F2", self.broker.worker.translate_notice)
+            self.init_single_hotkey("F5", self.broker.worker.go_notice)
+            self.init_single_hotkey("F10", self.broker.worker.so_notice)
+            self.init_single_hotkey("F11", self.broker.worker.si_notice)
+
+    def init_single_hotkey(self, key, fnCb):
+        ctx = idaapi.add_hotkey(key, fnCb)
+        if ctx is None:
+            print("[sync] failed to register hotkey %s", key)
+            del ctx
+        else:
+            self.hotkeys_ctx.append(ctx)
+
+    def uninit_hotkeys(self):
+        if not self.hotkeys_ctx:
+            return
+
+        for ctx in self.hotkeys_ctx:
+            if idaapi.del_hotkey(ctx):
+                del ctx
+
+        self.hotkeys_ctx = []
+
+    def init_broker(self):
+        print "[*] init_broker"
+        modname = self.name.encode('ascii', 'replace')
+        cmdline = u"\"%s\" -u \"%s\" --idb \"%s\"" % (
+            os.path.join(PYTHON_PATH, PYTHON_BIN),
+            BROKER_PATH, modname)
+        print "[*] init broker,", cmdline
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument("-a", "--address", nargs=1, action='store')
+        parser.add_argument('msg', nargs=argparse.REMAINDER)
+
+        self.broker = Broker(parser, self)
+        env = QtCore.QProcessEnvironment.systemEnvironment()
+        env.insert("IDB_PATH", IDB_PATH)
+        env.insert("PYTHON_PATH", os.path.realpath(PYTHON_PATH))
+        env.insert("PYTHON_BIN", PYTHON_BIN)
+
+        try:
+            self.broker.setProcessEnvironment(env)
+            self.broker.start(cmdline)
+        except Exception as e:
+            print "[-] failed to start broker: %s\n%s" % (str(e), traceback.format_exc())
+            return
+
+        self.init_hotkeys()
+        self.broker.worker.name = modname
+
+    def activate(self, ctx=idaapi.action_activation_ctx_t):
+        if not self.sync_on:
+            # Get the name:
+            name = idaapi.askstr(0, self.name, 'Override idb name:')
+            if not name:
+                return 1
+            self.name = name
+            self.init_broker()
+        else:
+            self.smooth_kill()
+
+        # Swap state
+        self.sync_on = not self.sync_on
+        idaapi.update_action_icon(ctx.action, self.icon)
+        return 1
+
+    @property
+    def icon(self):
+        if self.sync_on:
+            return SYNC_ON_ICON
+        else:
+            return SYNC_OFF_ICON
+
+    def update(self, ctx=idaapi.action_activation_ctx_t):
+        idaapi.update_action_icon(ctx.action, self.icon)
+        if idc.GetIdbPath():
+            return idaapi.AST_ENABLE_FOR_IDB
+        return idaapi.AST_DISABLE
+
+
+# --------------------------------------------------------------------------
+
 class RetSync(idaapi.plugin_t):
     flags = idaapi.PLUGIN_PROC
     comment = "Sync IDA with other debuggers"
@@ -1129,17 +1255,17 @@ class RetSync(idaapi.plugin_t):
     wanted_hotkey = ""
 
     def init(self):
+        action_desc = idaapi.action_desc_t(SYNC_ACTION_NAME, 'Ret-Sync', SyncHandler(), '',
+                                           'Enable/Disable Debugger Sync', SYNC_OFF_ICON)
+        idaapi.register_action(action_desc)
+        idaapi.attach_action_to_toolbar('DebugToolBar', SYNC_ACTION_NAME)
         return idaapi.PLUGIN_KEEP
 
     def term(self):
-        pass
+        idaapi.detach_action_from_toolbar('DebugToolBar', SYNC_ACTION_NAME)
 
     def run(self, arg):
-        if not idaapi.get_root_filename():
-            print "[sync] please load a file/idb before"
-            return
-
-        SyncForm_t().Show()
+        pass
 
 
 def PLUGIN_ENTRY():
