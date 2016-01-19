@@ -836,9 +836,11 @@ class DbgDirHlpr(object):
 class GraphManager():
     def __init__(self):
         idaname = "ida64" if idc.__EA64__ else "ida"
-        dll = ctypes.CDLL(None)
         if sys.platform == "win32":
             dll = ctypes.windll[idaname + ".wll"]
+        else:
+            dll = ctypes.CDLL(None)
+
 
         # -------
 
