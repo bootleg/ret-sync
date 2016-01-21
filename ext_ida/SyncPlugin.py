@@ -750,13 +750,17 @@ class Broker(QtCore.QProcess):
         print "[*] broker new state: ", states[new_state]
 
     def cb_broker_on_out(self):
+        # To make sure we get entire requests, we put all the incoming data into a
+        # "stream", and only take a value from it once we encounter a newline character.
         # readAllStandardOutput() returns QByteArray
         if use_qt5:
-            buffer = self.readAllStandardOutput().data().encode("ascii")
+            self.stream += self.readAllStandardOutput().data().encode("ascii")
         else:
-            buffer = self.readAll().data().encode("ascii")
-        batch = buffer.split('\n')
-        for req in batch:
+            self.stream += self.readAll().data().encode("ascii")
+
+        batch = self.stream.split('\n')
+        self.stream = batch[-1]
+        for req in batch[:-1]:
             self.worker.parse_exec(req)
 
     def __init__(self, parser, form):
@@ -768,6 +772,8 @@ class Broker(QtCore.QProcess):
 
         # Create a request handler
         self.worker = RequestHandler(parser, form)
+
+        self.stream = ''
 
 
 # --------------------------------------------------------------------------
@@ -840,7 +846,6 @@ class GraphManager():
             dll = ctypes.windll[idaname + ".wll"]
         else:
             dll = ctypes.CDLL(None)
-
 
         # -------
 
