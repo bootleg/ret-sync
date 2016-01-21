@@ -411,12 +411,27 @@ error_close:
     return E_FAIL;
 }
 
+BOOL SendAll(SOCKET socket, const char * buffer, const int length, int flags) {
+	int iResult;
+	int cbSent = 0;
+
+	while (length > cbSent) {
+		iResult = send(socket, buffer + cbSent, length - cbSent, flags);
+		if (SOCKET_ERROR == iResult) {
+			return FALSE;
+		}
+		cbSent += iResult;
+	}
+
+	return TRUE;
+}
 
 HRESULT TunnelSend(PCSTR Format, ...)
 {
     HRESULT hRes=S_OK;
     va_list Args;
-    int iResult;
+	BOOL bResult;
+	int iResult;
     size_t cbRemaining;
 
     if (FAILED(hRes=TunnelIsUp()))
@@ -437,8 +452,8 @@ HRESULT TunnelSend(PCSTR Format, ...)
     dprintf("[sync] send 0x%x bytes, %s\n", MAX_SEND-cbRemaining, SendBuffer);
     #endif
 
-    iResult = send(g_Sock, (const char *)SendBuffer, MAX_SEND-((unsigned int)cbRemaining), 0);
-    if (iResult == SOCKET_ERROR)
+    bResult = SendAll(g_Sock, (const char *)SendBuffer, MAX_SEND-((unsigned int)cbRemaining), 0);
+	if (bResult == SOCKET_ERROR)
     {
         iResult = WSAGetLastError();
         dprintf("[sync] send failed with error %d, 0x%x\n", iResult, g_Sock);
