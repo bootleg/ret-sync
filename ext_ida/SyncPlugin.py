@@ -19,7 +19,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-#!/usr/bin/env python
+# !/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 import os
@@ -33,6 +33,8 @@ import ctypes
 import socket
 import ConfigParser
 
+SYNC_ACTION_NAME = 're-sync:sync-button:action'
+
 try:
     import argparse
 except:
@@ -41,8 +43,8 @@ except:
 
 import idaapi
 import idautils
-from idaapi import PluginForm
-
+import idc
+import cute
 
 if sys.platform == 'win32':
     PYTHON_BIN = 'python.exe'
@@ -60,14 +62,12 @@ if not os.path.exists(os.path.join(PYTHON_PATH, PYTHON_BIN)):
     print "[-] please fix PYTHON_PATH value"
     sys.exit(0)
 
-
 site_packages = os.path.join(PYTHON_PATH, "lib", "site-packages")
 if not site_packages in sys.path:
     sys.path.insert(0, site_packages)
 
 try:
-    from PyQt5 import QtCore, QtWidgets
-    from PyQt5.QtCore import QProcess, QProcessEnvironment
+    from cute import QtCore, QtWidgets, use_qt5
 except:
     print "[-] failed to import Qt libs from PyQt5\n%s" % repr(sys.exc_info())
     sys.exit(0)
@@ -99,17 +99,25 @@ NETNODE_STORE = "$ SYNC_STORE"
 NETNODE_INDEX = 0xFFC0DEFF
 
 DBG_DIALECTS = {
-    'windbg': {'prefix': '!', 'si': 't', 'so': 'p', 'go': 'g', 'bp': 'bp ', 'hbp': 'ba e 1 ', 'bp1': 'bp /1 ', 'hbp1': 'ba e 1 /1 '},
-    'gdb': {'prefix': '', 'si': 'si', 'so': 'ni', 'go': 'continue', 'bp': 'b *', 'hbp': 'hb *',  'bp1': 'tb *', 'hbp1': 'thb *'},
-    'ollydbg2': {'prefix': '', 'si': 'si', 'so': 'so', 'go': 'go', 'bp': 'bp ', 'hbp': 'xxx ', 'bp1': 'xxx ', 'hbp1': 'xxx '},
-    'x64_dbg': {'prefix': '', 'si': 'sti', 'so': 'sto', 'go': 'go', 'bp': 'bp ', 'hbp': 'bph ', 'bp1': 'xxx ', 'hbp1': 'xxx '},
+    'windbg': {'prefix': '!', 'si': 't', 'so': 'p', 'go': 'g', 'bp': 'bp ', 'hbp': 'ba e 1 ', 'bp1': 'bp /1 ',
+               'hbp1': 'ba e 1 /1 '},
+    'gdb': {'prefix': '', 'si': 'si', 'so': 'ni', 'go': 'continue', 'bp': 'b *', 'hbp': 'hb *', 'bp1': 'tb *',
+            'hbp1': 'thb *'},
+    'ollydbg2': {'prefix': '', 'si': 'si', 'so': 'so', 'go': 'go', 'bp': 'bp ', 'hbp': 'xxx ', 'bp1': 'xxx ',
+                 'hbp1': 'xxx '},
+    'x64_dbg': {'prefix': '', 'si': 'sti', 'so': 'sto', 'go': 'go', 'bp': 'bp ', 'hbp': 'bph ', 'bp1': 'xxx ',
+                'hbp1': 'xxx '},
 }
+
+# TODO: The icons need to be released on termination.
+SYNC_ON_ICON = idaapi.load_custom_icon(os.path.join(os.path.dirname(__file__), 'sync_on.png'))
+SYNC_OFF_ICON = idaapi.load_custom_icon(os.path.join(os.path.dirname(__file__), 'sync_off.png'))
+
 
 # --------------------------------------------------------------------------
 
 
 class RequestHandler(object):
-
     # color callback
     def cb_color(self, ea):
         idaapi.set_item_color(ea, COL_CBTRACE)
@@ -196,7 +204,7 @@ class RequestHandler(object):
 
     # demangle names
     def demangle(self, name):
-        mask = idc.GetLongPrm(INF_SHORT_DN)
+        mask = idc.GetLongPrm(idc.INF_SHORT_DN)
         demangled = idc.Demangle(name, mask)
         if demangled is None:
             return name
@@ -230,7 +238,7 @@ class RequestHandler(object):
         if not ea:
             return
 
-        if(self.color):
+        if self.color:
             self.cb_color(ea)
 
         idaapi.jumpto(ea)
@@ -474,14 +482,13 @@ class RequestHandler(object):
 
     # specify debugger dialect used to send commands
     def req_set_dbg_dialect(self, hash):
-        global SyncForm
         dialect = hash['dialect']
         if dialect in DBG_DIALECTS:
             self.dbg_dialect = DBG_DIALECTS[dialect]
             print "[sync] set debugger dialect to %s, enabling hotkeys" % dialect
-            SyncForm.init_hotkeys()
+            self.form.init_hotkeys()
         else:
-            SyncForm.uninit_hotkeys()
+            self.form.uninit_hotkeys()
 
     # request from broker
     def req_broker(self, hash):
@@ -491,7 +498,7 @@ class RequestHandler(object):
             # simple message announcement
             print ("[*] << broker << %s" % hash['msg'])
 
-        elif(subtype == 'notice'):
+        elif subtype == 'notice':
             # notice from broker
             self.broker_port = int(hash['port'])
             print ("[*] << broker << listening on port %d" % self.broker_port)
@@ -514,11 +521,11 @@ class RequestHandler(object):
                         sys.exit()
 
         # enable/disable idb, if disable it drops most sync requests
-        elif(subtype == 'enable_idb'):
+        elif subtype == 'enable_idb':
             self.is_active = True
             print "[sync] idb is enabled"
 
-        elif(subtype == 'disable_idb'):
+        elif subtype == 'disable_idb':
             self.is_active = False
             self.cb_restore_last_line()
             print "[sync] idb is disabled"
@@ -622,8 +629,7 @@ class RequestHandler(object):
                 print "bp %d: conditional bp not supported" % i
             else:
                 if ((btype in [idc.BPT_EXEC, idc.BPT_SOFT]) and
-                    ((flags & idc.BPT_ENABLED) != 0)):
-
+                        ((flags & idc.BPT_ENABLED) != 0)):
                     offset = ea - self.base
                     bp = self.dbg_dialect['hbp' if (btype == idc.BPT_EXEC) else 'bp']
                     cmd = "%s%s+0x%x" % (bp, mod, offset)
@@ -685,7 +691,7 @@ class RequestHandler(object):
         try:
             self.broker_sock.sendall(notice)
         except:
-            None
+            pass
 
     def stop(self):
         if self.broker_sock:
@@ -697,7 +703,8 @@ class RequestHandler(object):
         self.is_active = False
         print "[sync] idb is disabled"
 
-    def __init__(self, parser):
+    def __init__(self, parser, form):
+        self.form = form
         self.color = False
         self.prev_loc = None
         self.prev_node = None
@@ -733,7 +740,6 @@ class RequestHandler(object):
 
 
 class Broker(QtCore.QProcess):
-
     def cb_on_error(self, error):
         errors = ["Failed to start", "Crashed", "Timedout",
                   "Read error", "Write Error", "Unknown Error"]
@@ -744,33 +750,42 @@ class Broker(QtCore.QProcess):
         print "[*] broker new state: ", states[new_state]
 
     def cb_broker_on_out(self):
+        # To make sure we get entire requests, we put all the incoming data into a
+        # "stream", and only take a value from it once we encounter a newline character.
         # readAllStandardOutput() returns QByteArray
-        buffer = self.readAllStandardOutput().data().encode("ascii")
-        batch = buffer.split('\n')
-        for req in batch:
+        if use_qt5:
+            self.stream += self.readAllStandardOutput().data().encode("ascii")
+        else:
+            self.stream += self.readAll().data().encode("ascii")
+
+        batch = self.stream.split('\n')
+        self.stream = batch[-1]
+        for req in batch[:-1]:
             self.worker.parse_exec(req)
 
-    def __init__(self, parser):
+    def __init__(self, parser, form):
         QtCore.QProcess.__init__(self)
 
-        self.error.connect(self.cb_on_error)
-        self.readyReadStandardOutput.connect(self.cb_broker_on_out)
-        self.stateChanged.connect(self.cb_broker_on_state_change)
+        cute.connect(self, 'error(QProcess::ProcessError)', self.cb_on_error)
+        cute.connect(self, 'readyReadStandardOutput()', self.cb_broker_on_out)
+        cute.connect(self, 'stateChanged(ProcessState)', self.cb_broker_on_state_change)
 
         # Create a request handler
-        self.worker = RequestHandler(parser)
+        self.worker = RequestHandler(parser, form)
+
+        self.stream = ''
+
 
 # --------------------------------------------------------------------------
 
 
 class DbgDirHlpr(object):
-
     @staticmethod
     def read_rsds_codeview():
         guid = None
         penode = idaapi.netnode()
-        penode.create(peutils_t.PE_NODE)
-        fpos = penode.altval(peutils_t.PE_ALT_DBG_FPOS)
+        penode.create(idautils.peutils_t.PE_NODE)
+        fpos = penode.altval(idautils.peutils_t.PE_ALT_DBG_FPOS)
 
         if (fpos == 0):
             print "[*] No debug directory"
@@ -825,17 +840,14 @@ class DbgDirHlpr(object):
 
 
 class GraphManager():
-
     def __init__(self):
-        idaname = "ida64" if __EA64__ else "ida"
+        idaname = "ida64" if idc.__EA64__ else "ida"
         if sys.platform == "win32":
             dll = ctypes.windll[idaname + ".wll"]
-        elif sys.platform == "linux2":
-            dll = ctypes.CDLL(None)
-        elif sys.platform == "darwin":
+        else:
             dll = ctypes.CDLL(None)
 
-        #-------
+        # -------
 
         # ui_notification_t dispatcher
         callui = ctypes.c_void_p.in_dll(dll, "callui")
@@ -845,7 +857,7 @@ class GraphManager():
         grentry = ctypes.c_void_p.in_dll(dll, "grentry")
         print "    grentry 0x%x" % grentry.value
 
-        #-------
+        # -------
 
         """
         ui_get_current_tform,   // * get current tform (only gui version)
@@ -871,7 +883,7 @@ class GraphManager():
 
         print "    curr tform * 0x%x" % parent_tform
 
-        #-------
+        # -------
 
         """
         ui_find_tform,      // * find tform with the specified caption  (only gui version)
@@ -897,7 +909,7 @@ class GraphManager():
 
         print "    find tform * 0x%x (IDA View-A)" % parent_tform2
 
-        #-------
+        # -------
 
         """
         inline graph_viewer_t *idaapi get_graph_viewer(TForm *parent)
@@ -912,7 +924,7 @@ class GraphManager():
         ret = get_graph_viewer(grcode_get_graph_viewer, parent_tform2, ctypes.byref(self.gv2))
         print "    graph viewer 0x%x ret 0x%x" % (self.gv2.value, ret)
 
-        #---------
+        # ---------
 
         """
         inline int  idaapi viewer_get_curnode(graph_viewer_t *gv)
@@ -946,24 +958,25 @@ class GraphManager():
 # --------------------------------------------------------------------------
 
 
-class SyncForm_t(PluginForm):
 
-    def cb_broker_started(self):
-        print "[*] broker started"
-        self.btn.setText("Restart")
+class SyncHandler(idaapi.action_handler_t):
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+        self.sync_on = False
+        self.name = None
+        name = idaapi.get_root_filename()
+        confpath = os.path.join(os.path.realpath(IDB_PATH), '.sync')
+        if os.path.exists(confpath):
+            config = ConfigParser.SafeConfigParser()
+            config.read(confpath)
+            if config.has_option(name, 'name'):
+                name = config.get(name, 'name')
+                print "[sync] overwrite idb name with %s" % name
+        self.name = name
 
-    def cb_broker_finished(self):
-        print "[*] broker finished"
-        if self.broker:
-            self.broker.worker.stop()
-            self.cb.stateChanged.disconnect(self.cb_change_state)
-            self.cb.toggle()
-            self.cb.stateChanged.connect(self.cb_change_state)
+        self.hotkeys_ctx = []
+        self.broker = None
 
-        self.btn.setText("Start")
-
-    # send a kill notice to the broker
-    # wait at most 2sec for him to gently kill itself
     def smooth_kill(self):
         self.uninit_hotkeys()
         if self.broker:
@@ -972,32 +985,6 @@ class SyncForm_t(PluginForm):
             broker.worker.cb_restore_last_line()
             broker.worker.kill_notice()
             broker.waitForFinished(1500)
-
-    def init_broker(self):
-        print "[*] init_broker"
-        modname = self.input.text().encode('ascii', 'replace')
-        cmdline = u"\"%s\" -u \"%s\" --idb \"%s\"" % (
-                  os.path.join(PYTHON_PATH, PYTHON_BIN),
-                  BROKER_PATH, modname)
-        print "[*] init broker,", cmdline
-
-        self.broker = Broker(self.parser)
-        env = QProcessEnvironment.systemEnvironment()
-        env.insert("IDB_PATH", IDB_PATH)
-        env.insert("PYTHON_PATH", os.path.realpath(PYTHON_PATH))
-        env.insert("PYTHON_BIN", PYTHON_BIN)
-
-        try:
-            self.broker.started.connect(self.cb_broker_started)
-            self.broker.finished.connect(self.cb_broker_finished)
-            self.broker.setProcessEnvironment(env)
-            self.broker.start(cmdline)
-        except Exception as e:
-            print "[-] failed to start broker: %s\n%s" % (str(e), traceback.format_exc())
-            return
-
-        self.init_hotkeys()
-        self.broker.worker.name = modname
 
     def init_hotkeys(self):
         if not self.hotkeys_ctx:
@@ -1029,107 +1016,88 @@ class SyncForm_t(PluginForm):
 
         self.hotkeys_ctx = []
 
-    def cb_btn_restart(self):
-        print "[sync] restarting broker."
-        if self.cb.checkState() == QtCore.Qt.Checked:
-            self.cb.toggle()
-            time.sleep(0.1)
-        self.cb.toggle()
+    def init_broker(self):
+        print "[*] init_broker"
+        modname = self.name.encode('ascii', 'replace')
+        cmdline = u"\"%s\" -u \"%s\" --idb \"%s\"" % (
+            os.path.join(PYTHON_PATH, PYTHON_BIN),
+            BROKER_PATH, modname)
+        print "[*] init broker,", cmdline
 
-    def cb_change_state(self, state):
-        if state == QtCore.Qt.Checked:
-            print "[*] sync enabled"
-            # Restart broker
-            self.hotkeys_ctx = []
+        parser = argparse.ArgumentParser()
+        parser.add_argument("-a", "--address", nargs=1, action='store')
+        parser.add_argument('msg', nargs=argparse.REMAINDER)
+
+        self.broker = Broker(parser, self)
+        env = QtCore.QProcessEnvironment.systemEnvironment()
+        env.insert("IDB_PATH", IDB_PATH)
+        env.insert("PYTHON_PATH", os.path.realpath(PYTHON_PATH))
+        env.insert("PYTHON_BIN", PYTHON_BIN)
+
+        try:
+            self.broker.setProcessEnvironment(env)
+            self.broker.start(cmdline)
+        except Exception as e:
+            print "[-] failed to start broker: %s\n%s" % (str(e), traceback.format_exc())
+            return
+
+        self.init_hotkeys()
+        self.broker.worker.name = modname
+
+    def activate(self, ctx=idaapi.action_activation_ctx_t):
+        if not self.sync_on:
+            # Get the name:
+            name = idaapi.askstr(0, self.name, 'Override idb name:')
+            if not name:
+                return 1
+            self.name = name
             self.init_broker()
         else:
-            if self.broker:
-                self.smooth_kill()
-            print "[*] sync disabled\n"
+            self.smooth_kill()
 
-    def OnCreate(self, form):
-        print "[sync] form create"
+        # Swap state
+        self.sync_on = not self.sync_on
+        idaapi.update_action_icon(ctx.action, self.icon)
+        return 1
 
-        # Get parent widget
-        parent = self.FormToPyQtWidget(form)
+    @property
+    def icon(self):
+        if self.sync_on:
+            return SYNC_ON_ICON
+        else:
+            return SYNC_OFF_ICON
 
-        # Create checkbox
-        self.cb = QtWidgets.QCheckBox("Synchronization enable")
-        self.cb.move(20, 20)
-        self.cb.stateChanged.connect(self.cb_change_state)
-
-        # Create label
-        label = QtWidgets.QLabel('Overwrite idb name:')
-
-        # Check in conf for name overwrite
-        name = idaapi.get_root_filename()
-        confpath = os.path.join(os.path.realpath(IDB_PATH), '.sync')
-        if os.path.exists(confpath):
-            config = ConfigParser.SafeConfigParser()
-            config.read(confpath)
-            if config.has_option(name, 'name'):
-                name = config.get(name, 'name')
-                print "[sync] overwrite idb name with %s" % name
-
-        # Create input field
-        self.input = QtWidgets.QLineEdit(parent)
-        self.input.setText(name)
-        self.input.setMaxLength = 256
-        self.input.setFixedWidth(300)
-
-        # Create restart button
-        self.btn = QtWidgets.QPushButton('restart', parent)
-        self.btn.setToolTip('Restart broker.')
-        self.btn.clicked.connect(self.cb_btn_restart)
-
-        # Create layout
-        layout = QtWidgets.QGridLayout()
-        layout.addWidget(self.cb)
-        layout.addWidget(label)
-        layout.addWidget(self.input)
-        layout.addWidget(self.btn, 2, 2)
-        layout.setColumnStretch(3, 1)
-        layout.setRowStretch(3, 1)
-        parent.setLayout(layout)
-
-        # workaround: crash when instanciated in Broker.__init__
-        # weird interaction with Qtxxx libraries ?
-        #  File "C:\Python27\Lib\argparse.py", line 1584, in __init__
-        #    self._positionals = add_group(_('positional arguments'))
-        #  File "C:\Python27\Lib\gettext.py", line 566, in gettext
-        #    return dgettext(_current_domain, message)
-        #  TypeError: 'NoneType' object is not callable
-        self.parser = argparse.ArgumentParser()
-        self.parser.add_argument("-a", "--address", nargs=1, action='store')
-        self.parser.add_argument('msg', nargs=argparse.REMAINDER)
-
-        # Synchronization is enabled by default
-        self.cb.toggle()
-
-    def OnClose(self, form):
-        print "[sync] form close"
-        self.smooth_kill()
-        global SyncForm
-        del SyncForm
-
-    def Show(self):
-        return PluginForm.Show(self, "ret-sync", options=PluginForm.FORM_PERSIST)
+    def update(self, ctx=idaapi.action_activation_ctx_t):
+        idaapi.update_action_icon(ctx.action, self.icon)
+        if idc.GetIdbPath():
+            return idaapi.AST_ENABLE_FOR_IDB
+        return idaapi.AST_DISABLE
 
 
 # --------------------------------------------------------------------------
 
-def main():
-    if not idaapi.get_root_filename():
-        print "[sync] please load a file/idb before"
-        return
+class RetSync(idaapi.plugin_t):
+    flags = idaapi.PLUGIN_PROC
+    comment = "Sync IDA with other debuggers"
+    help = "Sync IDA with other debuggers"
+    wanted_name = "ret-sync"
+    wanted_hotkey = ""
 
-    global SyncForm
+    def init(self):
+        self.handler = SyncHandler()
+        action_desc = idaapi.action_desc_t(SYNC_ACTION_NAME, 'Ret-Sync', self.handler, '',
+                                           'Enable/Disable Debugger Sync', SYNC_OFF_ICON)
+        idaapi.register_action(action_desc)
+        idaapi.attach_action_to_toolbar('DebugToolBar', SYNC_ACTION_NAME)
+        return idaapi.PLUGIN_KEEP
 
-    try:
-        SyncForm
-    except:
-        SyncForm = SyncForm_t()
+    def term(self):
+        idaapi.detach_action_from_toolbar('DebugToolBar', SYNC_ACTION_NAME)
+        self.handler.smooth_kill()
 
-    SyncForm.Show()
+    def run(self, arg):
+        pass
 
-main()
+
+def PLUGIN_ENTRY():
+    return RetSync()
