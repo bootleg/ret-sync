@@ -104,13 +104,22 @@ Use it
 
 
 1. Open IDB
-2. In the ``Debug`` toolbar, click the |ret-sync-icon-disabled| icon to start the plugin
+2. In the ``Debug`` toolbar, click the ret-sync icon to start the plugin
+
+    .. image::
+        media/ret-sync-icon-off.png
+
 3. You will be prompted to enter the name of the executable:
 
-    |idb-name-image|
+    .. image::
+        media/idb-name.png
 
-4. If all is well, the icon should change to |ret-sync-icon-enabled|, and the following be printed
-    in IDA's Output windows::
+4. If all is well, the icon should change to blue
+
+    .. image::
+        media/ret-sync-icon-on.png
+
+    and the following be printed in IDA's Output windows::
 
     [*] << broker << dispatcher not found, trying to run it
     [*] << broker << dispatcher now runs with pid: 8488
@@ -536,8 +545,3 @@ GREETZ
 Hail to Bruce Dang, StalkR, @Ivanlef0u, Damien Aumaître,
 Sébastien Renaud and Kévin Szkudlapski, _m00dy_ for their kindness, help, feedbacks and thoughts.
 Ilfak Guilfanov and Igor Skochinsky for their help with IDA's internals.
-
-
-.. |ret-sync-icon-disabled| image:: media/sync-off.png
-.. |ret-sync-icon-enabled| image:: media/sync-on.png
-.. |idb-name-image| .. image:: media/idb-name.png
