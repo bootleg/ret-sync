@@ -107,7 +107,7 @@ Use it
 2. In the ``Debug`` toolbar, click the |ret-sync-icon-disabled| icon to start the plugin
 3. You will be prompted to enter the name of the executable:
 
-    .. image:: ./media/idb-name.png
+    |idb-name-image|
 
 4. If all is well, the icon should change to |ret-sync-icon-enabled|, and the following be printed
     in IDA's Output windows::
@@ -538,5 +538,6 @@ Sébastien Renaud and Kévin Szkudlapski, _m00dy_ for their kindness, help, feed
 Ilfak Guilfanov and Igor Skochinsky for their help with IDA's internals.
 
 
-.. |ret-sync-icon-disabled| image:: ./media/sync-off.png
-.. |ret-sync-icon-enabled| image:: ./media/sync-on.png
+.. |ret-sync-icon-disabled| image:: media/sync-off.png
+.. |ret-sync-icon-enabled| image:: media/sync-on.png
+.. |idb-name-image| .. image:: media/idb-name.png
