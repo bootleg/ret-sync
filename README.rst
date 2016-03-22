@@ -104,38 +104,28 @@ Use it
 
 
 1. Open IDB
+2. In the ``Debug`` toolbar, click the |ret-sync-icon-disabled| icon to start the plugin
+3. You will be prompted to enter the name of the executable:
 
-2. IDA File->Script File -> SyncPlugin.py::
+    .. image:: ./media/idb-name.png
 
-    [sync] form create
-    [*] initBroker, "Y:\Python27\python.exe" -u "Y:\sync\broker.py" --idb "target.exe"
-    [sync] path Y:\target\
-    [sync] name target.exe
-    [sync] module base 0x400000
-        callui 0xf10ca0
-        grentry 0xfd17b0
-        curr tform * 0x960e538
-        find tform * 0x404e678 (IDA View-A)
-        graph viewer 0xc74c50 ret 0x0
-    [*] broker started
-    [sync] hotkey registered
-    [*] << broker << failed to connect to dispatcher (attempt 1)
+4. If all is well, the icon should change to |ret-sync-icon-enabled|, and the following be printed
+    in IDA's Output windows::
+
     [*] << broker << dispatcher not found, trying to run it
-    [*] << broker << dispatcher now runs with pid: 3816
+    [*] << broker << dispatcher now runs with pid: 8488
     [*] << broker << connected to dispatcher
-    [*] broker notice: listening on port 51101
-    [*] << broker << listening
-    [*] << broker << dispatcher msg: add new client (listening on port 51101), nb client(s): 1
+    [*] << broker << listening on port 2085
+    [*] << broker << dispatcher msg: add new client (listening on port 2085), nb client(s): 1
 
-3. Launch WinDbg on target
-
-4. Load extension::
+4. Launch WinDbg on target
+5. Load extension::
 
     0:000> .load sync
     [sync.dll] DebugExtensionInitialize, ExtensionApis loaded
 
 	
-5. Sync Windbg::
+6. Sync Windbg::
 
     0:000> !sync
     [sync] No argument found, using default host (127.0.0.1:9100)
@@ -153,29 +143,12 @@ Use it
     [sync] idb is enabled with the idb client matching the module name.
 
 	
-6. IDA plugin's GUI
-
-   ``Overwrite idb name`` input field is meant to change the default idb name. It is
-   the name that is used by the plugin to register with the dispatcher.
-   idb automatic switch is based on module name matching. In case of conflicting names
-   (like a ``foo.exe`` and ``foo.dll``), this can be used to ease matching.
-   Please note, if you modify the input field while the sync is active, you have to re-register
-   with the dispatcher; this can be done simply by using the "``Restart``" button.
-   
-   Please note that it is possible to alias by default using the ``.sync config`` file::
-   
-       [<ida_root_filename>]
-       name=<alias name>
-   
-   The section name is the idb's root file name and has only one option: "``name``".
-
-
 7. Use WinDbg and enjoy IDA's activity
 
 
 
 Extra commands
----------------
+--------------
 
 * **!syncoff**
 
@@ -468,7 +441,7 @@ LLDB support is experimental, however:
 
 
 OllyDbg2
----------
+--------
 
 OllyDbg2 support is experimental, however:
 
@@ -485,7 +458,7 @@ Due to the beta status of Olly2 API, only the following features have been imple
 
 
 x64dbg
--------
+------
 
 Based on testplugin,  https://github.com/x64dbg/testplugin. x64dbg support is experimental, however:
 
@@ -509,13 +482,13 @@ While mostly focus on dynamic analysis, it is of-course possible to use other to
 
 
 TODO
------
+----
 
 - Sure.
 
 
 KNOWN BUGS/LIMITATIONS
------------------------
+----------------------
 
 - Tested with Python 2.7, IDA 6.4 to 6.9 (Windows, Linux and Mac OS X), GNU gdb (GDB) 7.4.1 (Debian), lldb 310.2.37.
 - **THERE IS NO AUTHENTICATION/ENCRYPTION** or whatsoever between the parties; you're on your own.
@@ -563,3 +536,7 @@ GREETZ
 Hail to Bruce Dang, StalkR, @Ivanlef0u, Damien Aumaître,
 Sébastien Renaud and Kévin Szkudlapski, _m00dy_ for their kindness, help, feedbacks and thoughts.
 Ilfak Guilfanov and Igor Skochinsky for their help with IDA's internals.
+
+
+.. |ret-sync-icon-disabled| image:: ./media/sync-off.png
+.. |ret-sync-icon-enabled| image:: ./media/sync-on.png
