@@ -127,14 +127,14 @@ Use it
     [*] << broker << listening on port 2085
     [*] << broker << dispatcher msg: add new client (listening on port 2085), nb client(s): 1
 
-4. Launch WinDbg on target
-5. Load extension::
+5. Launch WinDbg on target
+6. Load extension::
 
     0:000> .load sync
     [sync.dll] DebugExtensionInitialize, ExtensionApis loaded
 
 	
-6. Sync Windbg::
+7. Sync Windbg::
 
     0:000> !sync
     [sync] No argument found, using default host (127.0.0.1:9100)
@@ -152,7 +152,7 @@ Use it
     [sync] idb is enabled with the idb client matching the module name.
 
 	
-7. Use WinDbg and enjoy IDA's activity
+8. Use WinDbg and enjoy IDA's activity
 
 
 
