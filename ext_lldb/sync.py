@@ -163,8 +163,11 @@ class Sync(object):
         if not pinfo:
             return
 
+        target = self._dbg.GetSelectedTarget()
+        ptr_size = target.GetAddressByteSize()
+        last_addr = (-1)%(2**(ptr_size*8))
         thread = process.GetSelectedThread()
-        frame = thread.GetFrameAtIndex(0)
+        frame = thread.GetSelectedFrame()
         offset = frame.pc
 
         mod = frame.GetModule()
@@ -173,8 +176,8 @@ class Sync(object):
         base = 0
         for i in range(4):
             sect = mod.GetSectionAtIndex(i)
-            addr = int(sect.addr)
-            if addr:
+            addr = sect.addr.GetLoadAddress(target)
+            if addr != last_addr:
                 base = addr
                 break
 
