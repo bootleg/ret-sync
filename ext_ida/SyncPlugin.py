@@ -1085,14 +1085,24 @@ class RetSync(idaapi.plugin_t):
 
     def init(self):
         self.handler = SyncHandler()
+
+        self.toolbar_name = 'DebugToolBar'
+
+        try:
+            if idaapi.create_toolbar('Ret-Sync', 'Ret-Sync'):
+                self.toolbar_name = 'Ret-Sync'
+        except AttributeError:
+            # Can't create own toolbar. Probably older version of IDA. Never-mind.
+            pass
+
         action_desc = idaapi.action_desc_t(SYNC_ACTION_NAME, 'Ret-Sync', self.handler, '',
                                            'Enable/Disable Debugger Sync', SYNC_OFF_ICON)
         idaapi.register_action(action_desc)
-        idaapi.attach_action_to_toolbar('DebugToolBar', SYNC_ACTION_NAME)
+        idaapi.attach_action_to_toolbar(self.toolbar_name, SYNC_ACTION_NAME)
         return idaapi.PLUGIN_KEEP
 
     def term(self):
-        idaapi.detach_action_from_toolbar('DebugToolBar', SYNC_ACTION_NAME)
+        idaapi.detach_action_from_toolbar(self.toolbar_name, SYNC_ACTION_NAME)
         self.handler.smooth_kill()
 
     def run(self, arg):
