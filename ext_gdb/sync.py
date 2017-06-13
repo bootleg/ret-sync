@@ -40,8 +40,8 @@ except ImportError:
 
 VERBOSE = 0
 
-PORT = 9100
 HOST = "localhost"
+PORT = 9100
 
 TIMER_PERIOD = 0.2
 
@@ -68,7 +68,10 @@ def gdb_execute(cmd):
     return s
 
 
-def get_pid():
+def get_pid(ctx=None):
+    if ctx != None and "pid" in ctx.keys():
+        return ctx["pid"]
+
     inferiors = gdb.inferiors()
     for inf in gdb.inferiors():
         if inf.is_valid():
@@ -77,10 +80,13 @@ def get_pid():
     raise Exception("get_pid(): failed to find program's pid")
 
 
-def get_maps(verbose=True):
+def get_maps(verbose=True, ctx=None):
     "Return list of maps (start, end, permissions, file name) via /proc"
 
-    pid = get_pid()
+    if ctx != None and "mappings" in ctx.keys():
+        return ctx["mappings"]
+
+    pid = get_pid(ctx=ctx)
     if pid is False:
         if verbose:
             print("Program not started")
@@ -267,18 +273,8 @@ class Sync(gdb.Command):
     def __init__(self, host, ctx=None):
         gdb.Command.__init__(self, "sync", gdb.COMMAND_OBSCURE, gdb.COMPLETE_NONE)
         self.ctx = ctx
-        if self.ctx != None:
-            if "pid" in self.ctx.keys():
-                self.pid = self.ctx["pid"]
-            else:
-                self.pid = None
-            if "mappings" in self.ctx.keys():
-                self.maps = self.ctx["mappings"]
-            else:
-                self.maps = None
-        else:
-            self.pid = None
-            self.maps = None
+        self.pid = None
+        self.maps = None
         self.base = None
         self.offset = None
         self.tunnel = None
@@ -300,7 +296,7 @@ class Sync(gdb.Command):
 
     def mod_info(self, addr):
         if not self.maps:
-            self.maps = get_maps()
+            self.maps = get_maps(ctx=self.ctx)
             if not self.maps:
                 print("[sync] failed to get maps")
                 return None
@@ -314,7 +310,7 @@ class Sync(gdb.Command):
             return
 
         if not self.pid:
-            self.pid = get_pid()
+            self.pid = get_pid(ctx=self.ctx)
             if not self.pid:
                 print("[sync] failed to get pid")
                 return
@@ -353,13 +349,7 @@ class Sync(gdb.Command):
 
     def newobj_handler(self, event):
         # force a new capture
-        if self.ctx != None:
-            if "mappings" in self.ctx.keys():
-                self.maps = self.ctx["mappings"]
-            else:
-                self.maps = None
-        else:
-            self.maps = None
+        self.maps = None
 
     def cont_handler(self, event):
         if self.tunnel:
@@ -386,18 +376,8 @@ class Sync(gdb.Command):
                 self.tunnel.close()
                 self.tunnel = None
 
-            if self.ctx != None:
-                if "pid" in self.ctx.keys():
-                    self.pid = self.ctx["pid"]
-                else:
-                    self.pid = None
-                if "mappings" in self.ctx.keys():
-                    self.maps = self.ctx["mappings"]
-                else:
-                    self.maps = None
-            else:
-                self.pid = None
-                self.maps = None
+            self.pid = None
+            self.maps = None
             self.base = None
             self.offset = None
         except Exception as e:
@@ -500,10 +480,7 @@ class Translate(gdb.Command):
             return
 
         base, address, module = [a.strip() for a in arg.split(" ")]
-        if self.sync.maps != None:
-            maps = self.sync.maps
-        else:
-            maps = get_maps()
+        maps = get_maps(ctx=self.sync.ctx)
         if not maps:
             print("[sync] failed to get maps")
             return None
@@ -734,11 +711,13 @@ class Cc(gdb.Command):
 
         # Continue to cursor
         res = gdb.execute("continue", to_string=True)
-        
+
         # Finally, delete breakpoint that we hit
         # XXX - we should actually log if the breakpoint we set earlier is the one we hit
         #       otherwise we remove the breakpoint anyway :/
         regexp_list = re.findall("Thread \d hit Breakpoint \d+, (0x[0-9a-f]+) in", res)
+        if not regexp_list:
+            regexp_list = re.findall("Breakpoint \d+, (0x[0-9a-f]+) in", res)
         if regexp_list:
             reached_addr = int(regexp_list[0], 16)
             if reached_addr == ida_cursor:
@@ -746,6 +725,8 @@ class Cc(gdb.Command):
                 res = gdb.execute("d %d" % bp_id)
             else:
                 print("[sync] reached other breakpoint before cc reached 0x%x" % ida_cursor)
+        else:
+            print("[sync] failed to remove breakpoint because gdb did not give us any info :/")
 
 class Patch(gdb.Command):
 
@@ -799,6 +780,8 @@ class Help(gdb.Command):
  > rln <address>                 = ask IDA Pro to convert an address into a symbol
  > bbt <symbol>                  = beautiful backtrace by executing "bt" and retrieving symbols from IDA Pro
                                    for each element of the backtrace
+ > patch <addr> <count> <size>   = patch in IDA count elements of size (in [4, 8]) at address, reflecting live
+                                   context
  > bx /i <symbol>                = similar to "x /i <address>" but supports a symbol resolved from IDA Pro
  > cc                            = continue to current cursor in IDA Pro (set a breakpoints, continue and remove it)
  > translate <base> <addr> <mod> = rebase an address with respect to local module's base\n\n""")
@@ -816,7 +799,7 @@ if __name__ == "__main__":
             PORT = config.getint("INTERFACE", 'port')
             print("[sync] configuration file loaded %s:%s" % (HOST, PORT))
             break
-    
+
     sync = Sync(HOST)
     Syncoff(sync)
     Cmt(sync)
