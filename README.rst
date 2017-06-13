@@ -504,7 +504,7 @@ In some scenario such as debugging embedded devices over serial, gdb is not awar
 `/proc/<pid>/maps`. In this case, we import a different script than sync.py in gdb. This script is quite simple and imports sync.py. The only difference is we create a context that is passed to `Sync()` when instanciating the object.
 It allows overriding some fields such as the pid or mappings but others could be added if required.
 
-  custom_sync.py:::
+custom_sync.py::
 
     from sync import *
 
