@@ -83,7 +83,7 @@ class DispatcherSrv():
         self.current_module = None
 
         self.sync_mode_auto = True
-        self.pat = re.compile('dbg disconnected')
+        self.disconn_pat = re.compile('dbg disconnected')
         self.req_handlers = {
             'new_client': self.req_new_client,
             'new_dbg': self.req_new_dbg,
@@ -181,7 +181,7 @@ class DispatcherSrv():
             # this is a normal [sync] request from debugger, forward it
             self.forward(req)
             # receive 'dbg disconnected', socket can be closed
-            if re.search(self.pat, req):
+            if re.search(self.disconn_pat, req):
                 self.close(s)
             return
 

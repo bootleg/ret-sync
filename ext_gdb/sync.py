@@ -68,7 +68,10 @@ def gdb_execute(cmd):
     return s
 
 
-def get_pid():
+def get_pid(ctx=None):
+    if ctx != None and "pid" in ctx.keys():
+        return ctx["pid"]
+
     inferiors = gdb.inferiors()
     for inf in gdb.inferiors():
         if inf.is_valid():
@@ -77,9 +80,13 @@ def get_pid():
     raise Exception("get_pid(): failed to find program's pid")
 
 
-def get_maps(verbose=True):
+def get_maps(verbose=True, ctx=None):
     "Return list of maps (start, end, permissions, file name) via /proc"
-    pid = get_pid()
+
+    if ctx != None and "mappings" in ctx.keys():
+        return ctx["mappings"]
+
+    pid = get_pid(ctx=ctx)
     if pid is False:
         if verbose:
             print("Program not started")
@@ -135,6 +142,7 @@ def get_pc():
 class Tunnel():
 
     def __init__(self, host):
+        print("[sync] Initializing tunnel to IDA using %s:%d..." % (host, PORT))
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.connect((host, PORT))
@@ -262,14 +270,16 @@ class Poller(threading.Thread):
 
 class Sync(gdb.Command):
 
-    def __init__(self):
+    def __init__(self, host, ctx=None):
         gdb.Command.__init__(self, "sync", gdb.COMMAND_OBSCURE, gdb.COMPLETE_NONE)
+        self.ctx = ctx
         self.pid = None
         self.maps = None
         self.base = None
         self.offset = None
         self.tunnel = None
         self.poller = None
+        self.host = host
         gdb.events.exited.connect(self.exit_handler)
         gdb.events.cont.connect(self.cont_handler)
         gdb.events.stop.connect(self.stop_handler)
@@ -286,7 +296,7 @@ class Sync(gdb.Command):
 
     def mod_info(self, addr):
         if not self.maps:
-            self.maps = get_maps()
+            self.maps = get_maps(ctx=self.ctx)
             if not self.maps:
                 print("[sync] failed to get maps")
                 return None
@@ -300,7 +310,7 @@ class Sync(gdb.Command):
             return
 
         if not self.pid:
-            self.pid = get_pid()
+            self.pid = get_pid(ctx=self.ctx)
             if not self.pid:
                 print("[sync] failed to get pid")
                 return
@@ -322,7 +332,8 @@ class Sync(gdb.Command):
 
             self.tunnel.send("[sync]{\"type\":\"loc\",\"base\":%d,\"offset\":%d}\n" % (self.base, self.offset))
         else:
-            print("[sync] unknown module at 0x%x" % self.offset)
+            print("[sync] unknown module at current PC: 0x%x" % self.offset)
+            print("[sync] NOTE: will resume sync when at a known module address")
             self.base = None
             self.offset = None
 
@@ -342,13 +353,15 @@ class Sync(gdb.Command):
 
     def cont_handler(self, event):
         if self.tunnel:
-            self.poller.disable()
+            if self.poller != None:
+                self.poller.disable()
         return ''
 
     def stop_handler(self, event):
         if self.tunnel:
             self.locate()
-            self.poller.enable()
+            if self.poller != None:
+                self.poller.enable()
         return ''
 
     def exit_handler(self, event):
@@ -376,7 +389,7 @@ class Sync(gdb.Command):
 
         if not self.tunnel:
             if arg == "":
-                arg = HOST
+                arg = self.host
 
             self.tunnel = Tunnel(arg)
             if not self.tunnel.is_up():
@@ -391,7 +404,8 @@ class Sync(gdb.Command):
             print('(update)')
 
         self.locate()
-        self.poller.enable()
+        if self.poller != None:
+            self.poller.enable()
 
 
 class Syncoff(gdb.Command):
@@ -466,7 +480,7 @@ class Translate(gdb.Command):
             return
 
         base, address, module = [a.strip() for a in arg.split(" ")]
-        maps = get_maps()
+        maps = get_maps(ctx=self.sync.ctx)
         if not maps:
             print("[sync] failed to get maps")
             return None
@@ -502,7 +516,6 @@ class Bc(gdb.Command):
         self.sync.tunnel.send("[notice]{\"type\":\"bc\",\"msg\":\"%s\",\"base\":%d,\"offset\":%d}\n" %
             (arg, self.sync.base, self.sync.offset))
 
-
 class Cmd(gdb.Command):
 
     def __init__(self, sync):
@@ -521,6 +534,232 @@ class Cmd(gdb.Command):
         self.sync.tunnel.send("[sync] {\"type\":\"cmd\",\"msg\":\"%s\", \"base\":%d,\"offset\":%d}\n" % (b64_output, self.sync.base, self.sync.offset))
         print("[sync] command output:\n%s" % cmd_output.strip())
 
+class Rln(gdb.Command):
+
+    def __init__(self, sync):
+        gdb.Command.__init__(self, "rln", gdb.COMMAND_OBSCURE, gdb.COMPLETE_NONE)
+        self.sync = sync
+
+    def invoke(self, arg, from_tty):
+        if not self.sync.base:
+            print("[sync] process not synced, command is dropped")
+            return
+
+        raddr = int(arg, 16)
+
+        # First disable tunnel polling for commands (happy race...)
+        self.sync.release_poll_timer()
+
+        # XXX - we don't support a rebase yet
+        self.sync.tunnel.send("[sync]{\"type\":\"rln\",\"raddr\":%d,\"rbase\":%d,\"base\":%d,\"offset\":%d}\n" %
+            (raddr, 0x0, self.sync.base, self.sync.offset))
+
+        # Let time for the IDB client to reply if it exists
+        time.sleep(0.150)
+
+        # Poll tunnel
+        msg = self.sync.tunnel.poll()
+        print("[sync] resolved symbol: %s" % msg)
+
+        # Re-enable tunnel polling
+        self.sync.create_poll_timer()
+
+symtable = {}
+class Bbt(gdb.Command):
+
+    def __init__(self, sync):
+        gdb.Command.__init__(self, "bbt", gdb.COMMAND_OBSCURE, gdb.COMPLETE_NONE)
+        self.sync = sync
+
+    def invoke(self, arg, from_tty):
+        if not self.sync.base:
+            print("[sync] process not synced, command is dropped")
+            return
+
+        bt = gdb.execute("bt", to_string=True)
+        bt = bt.split("\n")
+        bt = [l.split() for l in bt]
+        bt = bt[:-1] # remove [] at the end
+
+        for l in bt:
+            try:
+                raddr = int(l[1], 16)
+            except ValueError:
+                continue
+            symbol = l[3]
+            if symbol == '??':
+
+                # Do not update each request. XXX - have an updatedb command for that?
+                #if raddr in symtable.keys():
+                #    continue
+
+                # First disable tunnel polling for commands (happy race...)
+                self.sync.release_poll_timer()
+
+                # XXX - we don't support a rebase yet
+                self.sync.tunnel.send("[sync]{\"type\":\"rln\",\"raddr\":%d,\"rbase\":%d,\"base\":%d,\"offset\":%d}\n" %
+                    (raddr, 0x0, self.sync.base, self.sync.offset))
+
+                # Let time for the IDB client to reply if it exists
+                time.sleep(0.150)
+
+                # Poll tunnel
+                msg = self.sync.tunnel.poll()
+
+                symtable[raddr] = msg[:-1] # remove \n at the end
+
+        # Re-enable tunnel polling
+        self.sync.create_poll_timer()
+
+        # XXX - beautiful printed indented backtrace
+        for l in bt:
+            try:
+                raddr = int(l[1], 16)
+            except ValueError:
+                continue
+            try:
+                symbol = symtable[raddr]
+            except KeyError:
+                continue
+            if "+" in symbol:
+                symbol = symbol.split("+")[0]
+            l[3] = symbol
+
+        bt = "\n".join([" ".join(l) for l in bt])
+        print(bt)
+
+class Bx(gdb.Command):
+
+    def __init__(self, sync):
+        gdb.Command.__init__(self, "bx", gdb.COMMAND_OBSCURE, gdb.COMPLETE_NONE)
+        self.sync = sync
+
+    def invoke(self, arg, from_tty):
+        if not self.sync.base:
+            print("[sync] process not synced, command is dropped")
+            return
+
+        fmt, sym = [a.strip() for a in arg.split(" ")]
+        try:
+            addr = int(sym, 16)
+        except:
+            pass
+        else:
+            gdb.execute("x %s %s" % fmt, sym)
+            return
+
+        # XXX - split symbol+offset in case "+" is found in sym
+        offset = 0
+        if "+" in sym:
+            offset = int(sym.split("+")[1], 16)
+            sym = sym.split("+")[0]
+
+        # First disable tunnel polling for commands (happy race...)
+        self.sync.release_poll_timer()
+
+        # XXX - we don't support a rebase yet
+        self.sync.tunnel.send("[sync]{\"type\":\"rrln\",\"sym\":\"%s\",\"rbase\":%d,\"base\":%d,\"offset\":%d}\n" %
+            (sym, 0x0, self.sync.base, self.sync.offset))
+
+        # Let time for the IDB client to reply if it exists
+        time.sleep(0.150)
+
+        # Poll tunnel
+        msg = self.sync.tunnel.poll()
+        raddr = int(msg.rstrip())
+
+        # Re-enable tunnel polling
+        self.sync.create_poll_timer()
+
+        gdb.execute("x %s 0x%x" % (fmt, raddr+offset))
+
+class Cc(gdb.Command):
+
+    def __init__(self, sync):
+        gdb.Command.__init__(self, "cc", gdb.COMMAND_OBSCURE, gdb.COMPLETE_NONE)
+        self.sync = sync
+
+    def invoke(self, arg, from_tty):
+        if not self.sync.base:
+            print("[sync] process not synced, command is dropped")
+            return
+
+        # First disable tunnel polling for commands (happy race...)
+        self.sync.release_poll_timer()
+
+        self.sync.tunnel.send("[sync]{\"type\":\"cursor\"}\n")
+
+        # Let time for the IDB client to reply if it exists
+        time.sleep(0.150)
+
+        # Poll tunnel
+        msg = self.sync.tunnel.poll()
+        ida_cursor = int(msg, 10)
+        print("[sync] current cursor: 0x%x" % ida_cursor)
+
+        # Re-enable tunnel polling
+        self.sync.create_poll_timer()
+
+        time.sleep(0.150) # necessary to avoid garbage in res from gdb.execute()?
+
+        # Set a breakpoint to cursor address in IDA
+        res = gdb.execute("b *0x%x" % ida_cursor, to_string=True)
+        if not res.startswith("Breakpoint "):
+            print("[sync] failed to set a breakpoint to 0x%x" % ida_cursor)
+            return
+        bp_id = int(res.split()[1])
+
+        # Continue to cursor
+        res = gdb.execute("continue", to_string=True)
+
+        # Finally, delete breakpoint that we hit
+        # XXX - we should actually log if the breakpoint we set earlier is the one we hit
+        #       otherwise we remove the breakpoint anyway :/
+        regexp_list = re.findall("Thread \d hit Breakpoint \d+, (0x[0-9a-f]+) in", res)
+        if not regexp_list:
+            regexp_list = re.findall("Breakpoint \d+, (0x[0-9a-f]+) in", res)
+        if regexp_list:
+            reached_addr = int(regexp_list[0], 16)
+            if reached_addr == ida_cursor:
+                print("[sync] reached successfully")
+                res = gdb.execute("d %d" % bp_id)
+            else:
+                print("[sync] reached other breakpoint before cc reached 0x%x" % ida_cursor)
+        else:
+            print("[sync] failed to remove breakpoint because gdb did not give us any info :/")
+
+class Patch(gdb.Command):
+
+    def __init__(self, sync):
+        gdb.Command.__init__(self, "patch", gdb.COMMAND_OBSCURE, gdb.COMPLETE_NONE)
+        self.sync = sync
+
+    def invoke(self, arg, from_tty):
+        if not self.sync.base:
+            print("[sync] process not synced, command is dropped")
+            return
+
+        if arg == "":
+            print("[sync] usage: patch <address> <count qwords/dwords> <len_unit>")
+            return
+
+        addr, count, length = [a.strip() for a in arg.split(" ")]
+        addr = int(addr, 16)
+        count = int(count)
+        length = int(length)
+        if length != 4 and length != 8:
+            print("[sync] Only words and qword supported")
+            return
+
+        for i in range(count):
+            if length == 8:
+                res = gdb.execute("x /gx 0x%x" % (addr+8*i), to_string=True)
+            elif length == 4:
+                res = gdb.execute("x /wx 0x%x" % (addr+4*i), to_string=True)
+            res = res.rstrip() # remove EOL
+            value = int(res.split("\t")[1], 16)
+            self.sync.tunnel.send("[sync]{\"type\":\"patch\",\"addr\":%d,\"value\":%d, \"len\": %d}\n" %
+            (addr+length*i, value, length))
 
 class Help(gdb.Command):
 
@@ -530,7 +769,7 @@ class Help(gdb.Command):
     def invoke(self, arg, from_tty):
         print(
 """[sync] extension commands help:
- > sync <host>                   = synchronize with <host> or the default value
+ > sync [<host>]                 = synchronize with <host> or the default value
  > syncoff                       = stop synchronization
  > cmt [-a address] <string>     = add comment at current eip (or [addr]) in IDA
  > rcmt [-a address] <string>    = reset comments at current eip (or [addr]) in IDA
@@ -538,11 +777,17 @@ class Help(gdb.Command):
  > cmd <string>                  = execute command <string> and add its output as comment at current eip in IDA
  > bc <on|off|>                  = enable/disable path coloring in IDA
                                    color a single instruction at current eip if called without argument
+ > rln <address>                 = ask IDA Pro to convert an address into a symbol
+ > bbt <symbol>                  = beautiful backtrace by executing "bt" and retrieving symbols from IDA Pro
+                                   for each element of the backtrace
+ > patch <addr> <count> <size>   = patch in IDA count elements of size (in [4, 8]) at address, reflecting live
+                                   context
+ > bx /i <symbol>                = similar to "x /i <address>" but supports a symbol resolved from IDA Pro
+ > cc                            = continue to current cursor in IDA Pro (set a breakpoints, continue and remove it)
  > translate <base> <addr> <mod> = rebase an address with respect to local module's base\n\n""")
 
 
 if __name__ == "__main__":
-
     locations = [os.path.join(os.path.realpath(os.path.dirname(__file__)), ".sync"),
                  os.path.join(os.environ['HOME'], ".sync")]
 
@@ -555,7 +800,7 @@ if __name__ == "__main__":
             print("[sync] configuration file loaded %s:%s" % (HOST, PORT))
             break
 
-    sync = Sync()
+    sync = Sync(HOST)
     Syncoff(sync)
     Cmt(sync)
     Rcmt(sync)
@@ -563,4 +808,9 @@ if __name__ == "__main__":
     Bc(sync)
     Translate(sync)
     Cmd(sync)
+    Rln(sync)
+    Bbt(sync)
+    Bx(sync)
+    Cc(sync)
+    Patch(sync)
     Help()

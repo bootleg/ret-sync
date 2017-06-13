@@ -43,6 +43,8 @@ import idaapi
 import idautils
 from idaapi import PluginForm
 
+# Enable/disable logging JSON received in the IDA output window
+DEBUG = False
 
 if sys.platform == 'win32':
     PYTHON_BIN = 'python.exe'
@@ -91,8 +93,11 @@ CONNECT_BROKER_MAX_ATTEMPT = 4
 COL_GREEN = 0x33ff00
 COL_DEEP_PURPLE = 0xff44dd
 COL_YLW = 0x23ffff
+COL_BLUE_NAVY = 0x000080
+COL_GRAY = 0x808080
 
 COL_CURLINE = COL_YLW
+#COL_CURLINE = COL_BLUE_NAVY # renders better with some themes
 COL_CBTRACE = COL_GREEN
 
 NETNODE_STORE = "$ SYNC_STORE"
@@ -313,6 +318,38 @@ class RequestHandler(object):
         self.append_cmt(ea, "0x%x (rebased from 0x%x)" % (addr, raddr))
         print ("[*] comment added at 0x%x" % ea)
 
+    # return current cursor in IDA Pro
+    def req_cursor(self, hash):
+        print("[*] request IDA Pro cursor position")
+        addr = idc.ScreenEA()
+        self.notice_broker("cmd", "\"cmd\":\"%s\"" % addr)
+        return
+
+    # patch memory at specified address using info from debugger
+    def req_patch(self, hash):
+        addr, value, length = hash['addr'], hash['value'], hash['len']
+        if length != 4 and length != 8:
+            print("[x] unsupported length: %d" % length)
+            return
+        if length == 4:
+            prev_value = Dword(addr)
+            if MakeDword(addr) != 1:
+                print("[x] MakeDword failed")
+            if PatchDword(addr, value) != 1:
+                print("[x] PatchDword failed")
+            if not idc.OpOff(addr, 0, 0):
+                print("[x] OpOff failed")
+        elif length == 8:
+            prev_value = Qword(addr)
+            if MakeQword(addr) != 1:
+                print("[x] MakeQword failed")
+            if PatchQword(addr, value) != 1:
+                print("[x] PatchQword failed")
+            if not idc.OpOff(addr, 0, 0):
+                print("[x] OpOff failed")
+
+        print ("[*] patched 0x%x = 0x%x (previous was 0x%x)" % (addr, value, prev_value))
+
     # return idb's symbol for a given address
     def req_rln(self, hash):
         raddr, rbase, offset, base = hash['raddr'], hash['rbase'], hash['offset'], hash['base']
@@ -352,6 +389,19 @@ class RequestHandler(object):
             print ("[*] resolved symbol: %s" % sym)
         else:
             print ("[*] could not resolve symbol for address 0x%x" % addr)
+
+    # return address for a given idb's symbol
+    def req_rrln(self, hash):
+        sym, rbase, offset, base = hash['sym'], hash['rbase'], hash['offset'], hash['base']
+
+        print("[*] %s -  0x%x - 0x%x - 0x%x" % (sym, rbase, offset, base))
+
+        addr = idc.LocByName(sym)
+        if addr:
+            self.notice_broker("cmd", "\"cmd\":\"%s\"" % addr)
+            print ("[*] resolved address: %s" % addr)
+        else:
+            print ("[*] could not resolve address for symbol %s" % sym)
 
     # add label request at addr
     def req_lbl(self, hash):
@@ -524,21 +574,31 @@ class RequestHandler(object):
             print "[sync] idb is disabled"
 
     # parse and execute request
+    # Note that sometimes we don't receive the whole request from the broker.py 
+    # so parsing fails. One way for fixing this would be to fix broker.py to get
+    # everything until "\n" before proxying it but the way we do here is to read
+    # everything until "}" is received (end of json)
     def parse_exec(self, req):
+        if self.prev_req:
+            req = self.prev_req + req
+            self.prev_req = ""
         if req == '':
             return
+        if DEBUG:
+            print("parse_exec -> " + str(req))
 
         if not (req[0:6] == '[sync]'):
             print "\[<] bad hdr %s" % repr(req)
             print '[-] Request dropped due to bad header'
             return
 
-        req = self.normalize(req, 6)
+        req_ = self.normalize(req, 6)
         try:
-            hash = json.loads(req)
+            hash = json.loads(req_)
         except:
-            print "[-] Sync failed to parse json\n %s" % req
+            print "[-] Sync failed to parse json\n '%s'. Caching for next req..." % req_
             print "------------------------------------"
+            self.prev_req = req
             return
 
         type = hash['type']
@@ -555,7 +615,7 @@ class RequestHandler(object):
             if self.is_active:
                 req_handler(hash)
             else:
-                # otherwise, silently drop the request if idb is not enabled
+                print "[-] Drop the request because idb is not enabled"
                 return
 
         idaapi.refresh_idaview_anyway()
@@ -719,7 +779,10 @@ class RequestHandler(object):
             'rcmt': self.req_rcmt,
             'fcmt': self.req_fcmt,
             'raddr': self.req_raddr,
+            'cursor': self.req_cursor,
+            'patch': self.req_patch,
             'rln': self.req_rln,
+            'rrln': self.req_rrln,
             'lbl': self.req_lbl,
             'bc': self.req_bc,
             'bps_get': self.req_bps_get,
@@ -727,6 +790,7 @@ class RequestHandler(object):
             'modcheck': self.req_modcheck,
             'dialect': self.req_set_dbg_dialect
         }
+        self.prev_req = "" # used as a cache if json is not completely received
 
 
 # --------------------------------------------------------------------------
@@ -742,6 +806,8 @@ class Broker(QtCore.QProcess):
     def cb_broker_on_state_change(self, new_state):
         states = ["Not running", "Starting", "Running"]
         print "[*] broker new state: ", states[new_state]
+        if states[new_state] == "Not running":
+            print "[*] Check dispatcher.py.err if you think this is an error"
 
     def cb_broker_on_out(self):
         # readAllStandardOutput() returns QByteArray
@@ -1061,10 +1127,12 @@ class SyncForm_t(PluginForm):
         # Create label
         label = QtWidgets.QLabel('Overwrite idb name:')
 
-        # Check in conf for name overwrite
         name = idaapi.get_root_filename()
+        print "[sync] default idb name: %s" % name
+        # Check in conf for name overwrite
         confpath = os.path.join(os.path.realpath(IDB_PATH), '.sync')
         if os.path.exists(confpath):
+            print "[sync] found config file: %s" % confpath
             config = ConfigParser.SafeConfigParser()
             config.read(confpath)
             if config.has_option(name, 'name'):

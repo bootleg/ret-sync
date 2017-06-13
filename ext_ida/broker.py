@@ -17,10 +17,12 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#
 
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
+# Note that broker.py is executed by IDA Pro so it is not possible to see
+# any output using print() or similar
 
 import os
 import sys
@@ -265,9 +267,10 @@ if __name__ == "__main__":
         if loc in os.environ:
             confpath = os.path.join(os.path.realpath(os.environ[loc]), '.sync')
             if os.path.exists(confpath):
-                config = ConfigParser.SafeConfigParser({'port': PORT})
+                config = ConfigParser.SafeConfigParser({'port': PORT, 'host': HOST})
                 config.read(confpath)
                 PORT = config.getint("INTERFACE", 'port')
+                HOST = config.get("INTERFACE", 'host')
                 break
 
     server = BrokerSrv(args.idb[0])
