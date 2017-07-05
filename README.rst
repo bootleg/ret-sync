@@ -2,7 +2,7 @@
 ret-sync
 ========
 
-**ret-sync** stands for Reverse-Engineering Tools synchronization. It's a set of plugins that help to synchronize a debugging session (WinDbg/GDB/LLDB/OllyDbg2/x64dbg) with IDA disassembler. The underlying idea is simple: take the best from both worlds (static and dynamic analysis).
+**ret-sync** stands for Reverse-Engineering Tools synchronization. It's a set of plugins that help to synchronize a debugging session (WinDbg/GDB/LLDB/OllyDbg/OllyDbg2/x64dbg) with IDA disassembler. The underlying idea is simple: take the best from both worlds (static and dynamic analysis).
 
 From debuggers and dynamic analysis we got:
 
@@ -39,7 +39,7 @@ Content
 - ``ext_windbg/sync``: WinDbg extension source files, once built: ``sync.dll``
 - ``ext_gdb/sync.py``: GDB plugin
 - ``ext_lldb/sync.py``: LLDB plugin
-- ``ext_olly``: OllyDbg v2 plugin
+- ``ext_olly2``: OllyDbg v2 plugin
 - ``ext_x64dbg``: x64dbg plugin
 
 - ``ext_ida/SyncPlugin.py``: IDA plugin, receive async events from broker
@@ -576,6 +576,17 @@ LLDB support is experimental, however:
     lldb> cmt mooo
 
 
+OllyDbg 1.10
+------------
+
+OllyDbg 1.10 support is experimental, however:
+
+0. Build the plugin using the VS solution
+1. Copy the dll within Olly's plugin directory
+2. Use Plugins menu or shortcuts to enable (ALT+s)/disable (ALT+u)
+   synchronization.
+
+
 OllyDbg2
 ---------
 
@@ -670,5 +681,5 @@ GREETZ
 ------
 
 Hail to Bruce Dang, StalkR, @Ivanlef0u, Damien Aumaître,
-Sébastien Renaud and Kévin Szkudlapski, _m00dy_ for their kindness, help, feedbacks and thoughts.
+Sébastien Renaud and Kévin Szkudlapski, _m00dy_, @saidelike for their kindness, help, feedbacks and thoughts.
 Ilfak Guilfanov and Igor Skochinsky for their help with IDA's internals.
