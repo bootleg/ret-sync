@@ -32,6 +32,8 @@ import base64
 import tempfile
 import threading
 import gdb
+import traceback
+
 try:
     import configparser
 except ImportError:
@@ -45,6 +47,27 @@ PORT = 9100
 
 TIMER_PERIOD = 0.2
 
+# Borrowed from gef
+def show_last_exception():
+    PYTHON_MAJOR = sys.version_info[0]
+    horizontal_line = "-"
+    right_arrow = "->"
+    down_arrow = "\\->"
+
+    print("")
+    exc_type, exc_value, exc_traceback = sys.exc_info()
+    print(" Exception raised ".center(80, horizontal_line))
+    print("{}: {}".format(exc_type.__name__, exc_value))
+    print(" Detailed stacktrace ".center(80, horizontal_line))
+    for fs in traceback.extract_tb(exc_traceback)[::-1]:
+        if PYTHON_MAJOR==2:
+            filename, lineno, method, code = fs
+        else:
+            filename, lineno, method, code = fs.filename, fs.lineno, fs.name, fs.line
+
+        print("""{} File "{}", line {:d}, in {}()""".format(down_arrow, filename,
+                                                            lineno, method))
+        print("   {}    {}".format(right_arrow, code))
 
 # function gdb_execute courtesy of StalkR
 # Wrapper when gdb.execute(cmd, to_string=True) does not work
@@ -384,6 +407,12 @@ class Sync(gdb.Command):
             print(e)
 
     def invoke(self, arg, from_tty):
+        try:
+            self.invoke_(arg, from_tty)
+        except Exception as e:
+            show_last_exception()
+
+    def invoke_(self, arg, from_tty):
         if self.tunnel and not self.tunnel.is_up():
             self.tunnel = None
 
@@ -475,6 +504,12 @@ class Translate(gdb.Command):
         self.sync = sync
 
     def invoke(self, arg, from_tty):
+        try:
+            self.invoke_(arg, from_tty)
+        except Exception as e:
+            show_last_exception()
+
+    def invoke_(self, arg, from_tty):
         if not self.sync.base:
             print("[sync] process not synced, command is dropped")
             return
@@ -502,6 +537,12 @@ class Bc(gdb.Command):
         self.sync = sync
 
     def invoke(self, arg, from_tty):
+        try:
+            self.invoke_(arg, from_tty)
+        except Exception as e:
+            show_last_exception()
+
+    def invoke_(self, arg, from_tty):
         if not self.sync.base:
             print("[sync] process not synced, command is dropped")
             return
@@ -523,6 +564,12 @@ class Cmd(gdb.Command):
         self.sync = sync
 
     def invoke(self, arg, from_tty):
+        try:
+            self.invoke_(arg, from_tty)
+        except Exception as e:
+            show_last_exception()
+
+    def invoke_(self, arg, from_tty):
         if not self.sync.base:
             print("[sync] process not synced, command is dropped")
             return
@@ -541,6 +588,12 @@ class Rln(gdb.Command):
         self.sync = sync
 
     def invoke(self, arg, from_tty):
+        try:
+            self.invoke_(arg, from_tty)
+        except Exception as e:
+            show_last_exception()
+
+    def invoke_(self, arg, from_tty):
         if not self.sync.base:
             print("[sync] process not synced, command is dropped")
             return
@@ -572,6 +625,12 @@ class Bbt(gdb.Command):
         self.sync = sync
 
     def invoke(self, arg, from_tty):
+        try:
+            self.invoke_(arg, from_tty)
+        except Exception as e:
+            show_last_exception()
+
+    def invoke_(self, arg, from_tty):
         if not self.sync.base:
             print("[sync] process not synced, command is dropped")
             return
@@ -635,6 +694,12 @@ class Bx(gdb.Command):
         self.sync = sync
 
     def invoke(self, arg, from_tty):
+        try:
+            self.invoke_(arg, from_tty)
+        except Exception as e:
+            show_last_exception()
+
+    def invoke_(self, arg, from_tty):
         if not self.sync.base:
             print("[sync] process not synced, command is dropped")
             return
@@ -680,6 +745,12 @@ class Cc(gdb.Command):
         self.sync = sync
 
     def invoke(self, arg, from_tty):
+        try:
+            self.invoke_(arg, from_tty)
+        except Exception as e:
+            show_last_exception()
+
+    def invoke_(self, arg, from_tty):
         if not self.sync.base:
             print("[sync] process not synced, command is dropped")
             return
@@ -735,6 +806,12 @@ class Patch(gdb.Command):
         self.sync = sync
 
     def invoke(self, arg, from_tty):
+        try:
+            self.invoke_(arg, from_tty)
+        except Exception as e:
+            show_last_exception()
+
+    def invoke_(self, arg, from_tty):
         if not self.sync.base:
             print("[sync] process not synced, command is dropped")
             return
