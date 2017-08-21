@@ -425,7 +425,7 @@ extern "C" __declspec(dllexport) void CBMENUENTRY(CBTYPE cbType, PLUG_CB_MENUENT
 	case MENU_KEEP_FOCUS:
 		{
 			KeepFocus = !KeepFocus;
-			_plugin_menuentrysetchecked(pluginHandle, MENU_KEEP_FOCUS, !KeepFocus);
+			_plugin_menuentrysetchecked(pluginHandle, MENU_KEEP_FOCUS, KeepFocus);
 		}
 	break;
 	}
