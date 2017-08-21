@@ -50,6 +50,8 @@ static BOOL g_SyncAuto = true;
 // Buffer used to solve symbol's name
 static CHAR g_NameBuffer[MAX_MODULE_SIZE];
 
+//Focus mode
+bool KeepFocus = true;
 
 HRESULT
 LoadConfigurationFile()
@@ -160,6 +162,11 @@ UpdateState()
 
 	hRes = TunnelSend("[sync]{\"type\":\"loc\",\"base\":%llu,\"offset\":%llu}\n", g_Base, g_Offset);
 
+	if (KeepFocus)
+	{
+		SetForegroundWindow(GuiGetWindowHandle());
+	}
+	
 	return hRes;
 }
 
@@ -310,6 +317,8 @@ HRESULT sync(PSTR Args)
 	UpdateState();
 	CreatePollTimer();
 
+
+
 Exit:
 
 	return hRes;
@@ -389,17 +398,35 @@ extern "C" __declspec(dllexport) void CBMENUENTRY(CBTYPE cbType, PLUG_CB_MENUENT
 	case MENU_ENABLE_SYNC:
 	{
 		_plugin_logputs("[sync] enable sync");
-		sync(NULL);
+
+
+
+		if (sync(NULL) == S_OK)
+		{
+			_plugin_menuentrysetchecked(pluginHandle, MENU_ENABLE_SYNC, true);
+			_plugin_menuentrysetchecked(pluginHandle, MENU_DISABLE_SYNC, false);
+		}
+
 	}
 	break;
 
 	case MENU_DISABLE_SYNC:
 	{
 		_plugin_logputs("[sync] disable sync");
-		syncoff();
+
+		if(syncoff() == S_OK)
+		{
+			_plugin_menuentrysetchecked(pluginHandle, MENU_ENABLE_SYNC, false);
+			_plugin_menuentrysetchecked(pluginHandle, MENU_DISABLE_SYNC, true);
+		}
 	}
 	break;
 
+	case MENU_KEEP_FOCUS:
+		{
+			KeepFocus = !KeepFocus;
+			_plugin_menuentrysetchecked(pluginHandle, MENU_KEEP_FOCUS, !KeepFocus);
+		}
 	break;
 	}
 }
@@ -463,4 +490,6 @@ void coreSetup()
 {
 	_plugin_menuaddentry(hMenu, MENU_ENABLE_SYNC, "&Enable sync");
 	_plugin_menuaddentry(hMenu, MENU_DISABLE_SYNC, "&Disable sync");
+	_plugin_menuaddentry(hMenu, MENU_KEEP_FOCUS, "&Keep x64 focused");
+	_plugin_menuentrysetchecked(pluginHandle, MENU_KEEP_FOCUS, KeepFocus);
 }
