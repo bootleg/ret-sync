@@ -162,10 +162,7 @@ UpdateState()
 
 	hRes = TunnelSend("[sync]{\"type\":\"loc\",\"base\":%llu,\"offset\":%llu}\n", g_Base, g_Offset);
 
-	if (KeepFocus)
-	{
-		SetForegroundWindow(GuiGetWindowHandle());
-	}
+
 	
 	return hRes;
 }
@@ -365,6 +362,10 @@ extern "C" __declspec(dllexport) void CBPAUSEDEBUG(CBTYPE cbType, PLUG_CB_PAUSED
 
 	if (SUCCEEDED(TunnelIsUp()))
 	{
+		if (KeepFocus)
+		{
+			SetForegroundWindow(GuiGetWindowHandle());
+		}
 		UpdateState();
 		CreatePollTimer();
 	}
@@ -426,6 +427,15 @@ extern "C" __declspec(dllexport) void CBMENUENTRY(CBTYPE cbType, PLUG_CB_MENUENT
 		{
 			KeepFocus = !KeepFocus;
 			_plugin_menuentrysetchecked(pluginHandle, MENU_KEEP_FOCUS, KeepFocus);
+			if (KeepFocus)
+			{
+				_plugin_logputs("[sync_focus] Enabled");
+			}
+			else
+			{
+				_plugin_logputs("[sync_focus] Disabled");
+			}
+			
 		}
 	break;
 	}
