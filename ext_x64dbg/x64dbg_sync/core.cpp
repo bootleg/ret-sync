@@ -109,6 +109,31 @@ failed:
 	return E_FAIL;
 }
 
+void SetForegroundWindowInternal(HWND hWnd)
+{
+	if(!::IsWindow(hWnd)) return;
+
+	BYTE keyState[256] = {0};
+	//to unlock SetForegroundWindow we need to imitate Alt pressing
+	if(::GetKeyboardState((LPBYTE)&keyState))
+	{
+		if(!(keyState[VK_MENU] & 0x80))
+		{
+			::keybd_event(VK_MENU, 0, KEYEVENTF_EXTENDEDKEY | 0, 0);
+		}
+	}
+
+	::SetForegroundWindow(hWnd);
+
+	if(::GetKeyboardState((LPBYTE)&keyState))
+	{
+		if(!(keyState[VK_MENU] & 0x80))
+		{
+			::keybd_event(VK_MENU, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+		}
+	}
+}
+
 
 // Update state and send info to client: eip module's base address, offset, name
 HRESULT
@@ -120,6 +145,15 @@ UpdateState()
 	ULONG64 PrevBase = g_Base;
 	ULONG NameSize = 0;
 	HANDLE hProcess;
+
+
+	if (KeepFocus)
+	{
+		//_plugin_logputs("[sync] x64dbg is focused ?");
+		SetForegroundWindowInternal(GuiGetWindowHandle());
+	}
+
+
 
 	g_Offset = GetContextData(UE_CIP);
 
@@ -362,10 +396,6 @@ extern "C" __declspec(dllexport) void CBPAUSEDEBUG(CBTYPE cbType, PLUG_CB_PAUSED
 
 	if (SUCCEEDED(TunnelIsUp()))
 	{
-		if (KeepFocus)
-		{
-			SetForegroundWindow(GuiGetWindowHandle());
-		}
 		UpdateState();
 		CreatePollTimer();
 	}
