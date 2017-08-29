@@ -31,6 +31,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //menu identifiers
 #define MENU_ENABLE_SYNC 0
 #define MENU_DISABLE_SYNC 1
+#define MENU_KEEP_FOCUS 2
 
 
 //functions

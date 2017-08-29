@@ -50,6 +50,8 @@ static BOOL g_SyncAuto = true;
 // Buffer used to solve symbol's name
 static CHAR g_NameBuffer[MAX_MODULE_SIZE];
 
+//Focus mode
+bool KeepFocus = true;
 
 HRESULT
 LoadConfigurationFile()
@@ -107,6 +109,31 @@ failed:
 	return E_FAIL;
 }
 
+void SetForegroundWindowInternal(HWND hWnd)
+{
+	if(!::IsWindow(hWnd)) return;
+
+	BYTE keyState[256] = {0};
+	//to unlock SetForegroundWindow we need to imitate Alt pressing
+	if(::GetKeyboardState((LPBYTE)&keyState))
+	{
+		if(!(keyState[VK_MENU] & 0x80))
+		{
+			::keybd_event(VK_MENU, 0, KEYEVENTF_EXTENDEDKEY | 0, 0);
+		}
+	}
+
+	::SetForegroundWindow(hWnd);
+
+	if(::GetKeyboardState((LPBYTE)&keyState))
+	{
+		if(!(keyState[VK_MENU] & 0x80))
+		{
+			::keybd_event(VK_MENU, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+		}
+	}
+}
+
 
 // Update state and send info to client: eip module's base address, offset, name
 HRESULT
@@ -118,6 +145,15 @@ UpdateState()
 	ULONG64 PrevBase = g_Base;
 	ULONG NameSize = 0;
 	HANDLE hProcess;
+
+
+	if (KeepFocus)
+	{
+		//_plugin_logputs("[sync] x64dbg is focused ?");
+		SetForegroundWindowInternal(GuiGetWindowHandle());
+	}
+
+
 
 	g_Offset = GetContextData(UE_CIP);
 
@@ -160,6 +196,8 @@ UpdateState()
 
 	hRes = TunnelSend("[sync]{\"type\":\"loc\",\"base\":%llu,\"offset\":%llu}\n", g_Base, g_Offset);
 
+
+	
 	return hRes;
 }
 
@@ -310,6 +348,8 @@ HRESULT sync(PSTR Args)
 	UpdateState();
 	CreatePollTimer();
 
+
+
 Exit:
 
 	return hRes;
@@ -389,17 +429,44 @@ extern "C" __declspec(dllexport) void CBMENUENTRY(CBTYPE cbType, PLUG_CB_MENUENT
 	case MENU_ENABLE_SYNC:
 	{
 		_plugin_logputs("[sync] enable sync");
-		sync(NULL);
+
+
+
+		if (sync(NULL) == S_OK)
+		{
+			_plugin_menuentrysetchecked(pluginHandle, MENU_ENABLE_SYNC, true);
+			_plugin_menuentrysetchecked(pluginHandle, MENU_DISABLE_SYNC, false);
+		}
+
 	}
 	break;
 
 	case MENU_DISABLE_SYNC:
 	{
 		_plugin_logputs("[sync] disable sync");
-		syncoff();
+
+		if(syncoff() == S_OK)
+		{
+			_plugin_menuentrysetchecked(pluginHandle, MENU_ENABLE_SYNC, false);
+			_plugin_menuentrysetchecked(pluginHandle, MENU_DISABLE_SYNC, true);
+		}
 	}
 	break;
 
+	case MENU_KEEP_FOCUS:
+		{
+			KeepFocus = !KeepFocus;
+			_plugin_menuentrysetchecked(pluginHandle, MENU_KEEP_FOCUS, KeepFocus);
+			if (KeepFocus)
+			{
+				_plugin_logputs("[sync_focus] Enabled");
+			}
+			else
+			{
+				_plugin_logputs("[sync_focus] Disabled");
+			}
+			
+		}
 	break;
 	}
 }
@@ -463,4 +530,6 @@ void coreSetup()
 {
 	_plugin_menuaddentry(hMenu, MENU_ENABLE_SYNC, "&Enable sync");
 	_plugin_menuaddentry(hMenu, MENU_DISABLE_SYNC, "&Disable sync");
+	_plugin_menuaddentry(hMenu, MENU_KEEP_FOCUS, "&Keep x64 focused");
+	_plugin_menuentrysetchecked(pluginHandle, MENU_KEEP_FOCUS, KeepFocus);
 }
