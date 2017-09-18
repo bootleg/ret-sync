@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016, Alexandre Gazet.
+# Copyright (C) 2016-2017, Alexandre Gazet.
 #
 # Copyright (C) 2012-2015, Quarkslab.
 #
@@ -43,8 +43,9 @@ import idaapi
 import idautils
 from idaapi import PluginForm
 
+
 # Enable/disable logging JSON received in the IDA output window
-DEBUG = False
+DEBUG_JSON = False
 
 if sys.platform == 'win32':
     PYTHON_BIN = 'python.exe'
@@ -64,7 +65,7 @@ if not os.path.exists(os.path.join(PYTHON_PATH, PYTHON_BIN)):
 
 
 site_packages = os.path.join(PYTHON_PATH, "lib", "site-packages")
-if not site_packages in sys.path:
+if site_packages not in sys.path:
     sys.path.insert(0, site_packages)
 
 try:
@@ -574,17 +575,21 @@ class RequestHandler(object):
             print "[sync] idb is disabled"
 
     # parse and execute request
-    # Note that sometimes we don't receive the whole request from the broker.py 
+    # Note that sometimes we don't receive the whole request from the broker.py
     # so parsing fails. One way for fixing this would be to fix broker.py to get
     # everything until "\n" before proxying it but the way we do here is to read
     # everything until "}" is received (end of json)
     def parse_exec(self, req):
         if self.prev_req:
+            if self.prev_req != "":
+                if DEBUG_JSON:
+                    print "[+] JSON merge with request: \"%s\"" % req
+
             req = self.prev_req + req
             self.prev_req = ""
         if req == '':
             return
-        if DEBUG:
+        if DEBUG_JSON:
             print("parse_exec -> " + str(req))
 
         if not (req[0:6] == '[sync]'):
@@ -596,13 +601,14 @@ class RequestHandler(object):
         try:
             hash = json.loads(req_)
         except:
-            print "[-] Sync failed to parse json\n '%s'. Caching for next req..." % req_
-            print "------------------------------------"
+            if DEBUG_JSON:
+                print "[-] Sync failed to parse json\n '%s'. Caching for next req..." % req_
+                print "------------------------------------"
             self.prev_req = req
             return
 
         type = hash['type']
-        if not type in self.req_handlers:
+        if type not in self.req_handlers:
             print ("[*] unknown request: %s" % type)
             return
 
@@ -682,7 +688,7 @@ class RequestHandler(object):
                 print "bp %d: conditional bp not supported" % i
             else:
                 if ((btype in [idc.BPT_EXEC, idc.BPT_SOFT]) and
-                    ((flags & idc.BPT_ENABLED) != 0)):
+                   ((flags & idc.BPT_ENABLED) != 0)):
 
                     offset = ea - self.base
                     bp = self.dbg_dialect['hbp' if (btype == idc.BPT_EXEC) else 'bp']
@@ -790,7 +796,7 @@ class RequestHandler(object):
             'modcheck': self.req_modcheck,
             'dialect': self.req_set_dbg_dialect
         }
-        self.prev_req = "" # used as a cache if json is not completely received
+        self.prev_req = ""  # used as a cache if json is not completely received
 
 
 # --------------------------------------------------------------------------
@@ -893,117 +899,14 @@ class DbgDirHlpr(object):
 class GraphManager():
 
     def __init__(self):
-        idaname = "ida64" if __EA64__ else "ida"
-        if sys.platform == "win32":
-            dll = ctypes.windll[idaname + ".wll"]
-        elif sys.platform == "linux2":
-            dll = ctypes.CDLL(None)
-        elif sys.platform == "darwin":
-            dll = ctypes.CDLL(None)
-
-        #-------
-
-        # ui_notification_t dispatcher
-        callui = ctypes.c_void_p.in_dll(dll, "callui")
-        print "    callui 0x%x" % callui.value
-
-        # graph_notification_t dispatcher
-        grentry = ctypes.c_void_p.in_dll(dll, "grentry")
-        print "    grentry 0x%x" % grentry.value
-
-        #-------
-
-        """
-        ui_get_current_tform,   // * get current tform (only gui version)
-                                // Parameters: none
-                                // Returns: TFrom *
-                                // NB: this callback works only with the tabbed forms!
-        """
-
-        ui_get_current_tform = ctypes.c_int(75)
-
-        # workaround for IDA linux binary compiled by GCC
-        # callui return value is returned through an implicit extra argument
-        if sys.platform == "linux2":
-            return_value = ctypes.c_int(0)
-            func_ptr_type = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.POINTER(ctypes.c_int), ctypes.c_int)
-            get_current_tform = func_ptr_type(callui.value)
-            get_current_tform(ctypes.byref(return_value), ui_get_current_tform)
-            parent_tform = return_value.value
-        else:
-            func_ptr_type = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_int)
-            get_current_tform = func_ptr_type(callui.value)
-            parent_tform = get_current_tform(ui_get_current_tform)
-
-        print "    curr tform * 0x%x" % parent_tform
-
-        #-------
-
-        """
-        ui_find_tform,      // * find tform with the specified caption  (only gui version)
-                            // Parameters: const char *caption
-                            // Returns: TFrom *
-                            // NB: this callback works only with the tabbed forms!
-        """
-
-        ui_find_tform = ctypes.c_int(74)
-
-        # workaround for IDA linux binary compiled by GCC
-        # callui return value is returned through an implicit extra argument
-        if sys.platform == "linux2":
-            return_value = ctypes.c_int(0)
-            func_ptr_type = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.POINTER(ctypes.c_int), ctypes.c_int, ctypes.c_char_p)
-            find_tform = func_ptr_type(callui.value)
-            find_tform(ctypes.byref(return_value), ui_find_tform, ctypes.c_char_p("IDA View-A"))
-            parent_tform2 = return_value.value
-        else:
-            func_ptr_type = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_int, ctypes.c_char_p)
-            find_tform = func_ptr_type(callui.value)
-            parent_tform2 = find_tform(ui_find_tform, ctypes.c_char_p("IDA View-A"))
-
-        print "    find tform * 0x%x (IDA View-A)" % parent_tform2
-
-        #-------
-
-        """
-        inline graph_viewer_t *idaapi get_graph_viewer(TForm *parent)
-            { graph_viewer_t *gv = NULL; grentry(grcode_get_graph_viewer, parent, &gv); return gv; }
-        """
-
-        grcode_get_graph_viewer = ctypes.c_int(0x100 + 1)
-        func_ptr_type_1 = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p)
-        get_graph_viewer = func_ptr_type_1(grentry.value)
-
-        self.gv2 = ctypes.c_void_p()
-        ret = get_graph_viewer(grcode_get_graph_viewer, parent_tform2, ctypes.byref(self.gv2))
-        print "    graph viewer 0x%x ret 0x%x" % (self.gv2.value, ret)
-
-        #---------
-
-        """
-        inline int  idaapi viewer_get_curnode(graph_viewer_t *gv)
-            { return grentry(grcode_get_curnode, gv); }
-        """
-
-        func_ptr_type_7 = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_void_p)
-        self.get_curnode = func_ptr_type_7(grentry.value)
-
-        """
-        inline void idaapi viewer_center_on(graph_viewer_t *gv, int node)
-            {        grentry(grcode_center_on, gv, node); }
-        """
-
-        func_ptr_type_8 = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_void_p)
-        self.center_on = func_ptr_type_8(grentry.value)
-        self.grcode_center_on = ctypes.c_int(0x100 + 8)
-        self.grcode_get_curnode = ctypes.c_int(0x100 + 7)
         self.prev_node = None
+        self.graph_viewer = ida_kernwin.get_current_viewer()
 
     def center(self):
-        curnode = self.get_curnode(self.grcode_get_curnode, self.gv2)
+        curnode = ida_graph.viewer_get_curnode(self.graph_viewer)
 
         if not (self.prev_node == curnode):
-            self.center_on(self.grcode_center_on, self.gv2, curnode)
+            ida_graph.viewer_center_on(self.graph_viewer, curnode)
             self.prev_node = curnode
 
         return curnode

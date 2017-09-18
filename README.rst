@@ -39,6 +39,7 @@ Content
 - ``ext_windbg/sync``: WinDbg extension source files, once built: ``sync.dll``
 - ``ext_gdb/sync.py``: GDB plugin
 - ``ext_lldb/sync.py``: LLDB plugin
+- ``ext_olly1``: OllyDbg 1.10 plugin
 - ``ext_olly2``: OllyDbg v2 plugin
 - ``ext_x64dbg``: x64dbg plugin
 
