@@ -22,11 +22,11 @@ Keys features:
 
 * Pass data (comment, command output) from debugger to disassembler (IDA)
 * Multiple IDBs can be synced at the same time allowing to easily trace through multiple modules
-* No need to deal with ALSR, addresses are rebased on-the-fly
+* No need to deal with ASLR, addresses are rebased on-the-fly
 * IDBs and debugger can be on different hosts
 
 
-ret-sync is a fork of `qb-sync <https://github.com/quarkslab/qb-sync>`_ that I developed and maintained during my stay at `Quarkslab <http://www.quarkslab.com>`_.
+**ret-sync** is a fork of `qb-sync <https://github.com/quarkslab/qb-sync>`_ that I developed and maintained during my stay at `Quarkslab <http://www.quarkslab.com>`_.
 
 
 Below we detail most of the commands for IDA/Windbg but most concepts apply to all debuggers so
@@ -396,7 +396,7 @@ IDA bindings over WinDbg commands:
 * Ctrl-F2  - Set hardware breakpoint at cursor address
 * Ctrl-F3  - Set one-shot hardware breakpoint at cursor address
 * Alt-F2 - Translate (rebase in debugger) current cursor address
-* F5  - Go
+* Alt-F5  - Go
 * F10 - Single step
 * F11 - Single trace
 
@@ -638,7 +638,7 @@ TODO
 KNOWN BUGS/LIMITATIONS
 -----------------------
 
-- Tested with Python 2.7, IDA 6.4 to 6.9 (Windows, Linux and Mac OS X), GNU gdb (GDB) 7.4.1 (Debian), lldb 310.2.37.
+- Tested with Python 2.7, IDA 6.4 to 7.0 (Windows, Linux and Mac OS X), GNU gdb (GDB) 7.4.1 (Debian), lldb 310.2.37.
 - **THERE IS NO AUTHENTICATION/ENCRYPTION** or whatsoever between the parties; you're on your own.
 - Self modifying code is out of scope.
 
@@ -658,7 +658,7 @@ With WinDbg:
 With IDA:
 
 - Graph window redrawing is quite slow for big graphs.
-- ret-sync shortcuts conflicts in Linux environments.
+- **ret-sync** shortcuts conflicts in Linux environments.
 
 
 LICENSE
@@ -681,6 +681,7 @@ along with this program.  If not, see http://www.gnu.org/licenses/.
 GREETZ
 ------
 
-Hail to Bruce Dang, StalkR, @Ivanlef0u, Damien Aumaître,
-Sébastien Renaud and Kévin Szkudlapski, _m00dy_, @saidelike for their kindness, help, feedbacks and thoughts.
-Ilfak Guilfanov and Igor Skochinsky for their help with IDA's internals.
+Hail to Bruce Dang, StalkR, @Ivanlef0u, Damien Aumaître, Sébastien Renaud and
+Kévin Szkudlapski, @_m00dy_, @saidelike for their kindness, help, feedbacks
+and thoughts. Ilfak Guilfanov and Igor Skochinsky for their help with IDA's
+internals.

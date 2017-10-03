@@ -41,6 +41,7 @@ except:
 
 import idaapi
 import idautils
+import ida_graph
 from idaapi import PluginForm
 
 
@@ -711,7 +712,7 @@ class RequestHandler(object):
         self.notice_broker("cmd", "\"cmd\":\"%s\"" % cmd)
         print "[sync] translate address 0x%x" % ea
 
-    # send a go command (F5) to the debugger (via the broker and dispatcher)
+    # send a go command (Alt-F5) to the debugger (via the broker and dispatcher)
     def go_notice(self):
         if not self.is_active:
             print "[sync] idb isn't enabled, can't go"
@@ -976,7 +977,7 @@ class SyncForm_t(PluginForm):
             self.init_single_hotkey("Ctrl-F3", self.broker.worker.hbp_oneshot_notice)
             self.init_single_hotkey("Ctrl-F1", self.broker.worker.export_bp_notice)
             self.init_single_hotkey("Alt-F2", self.broker.worker.translate_notice)
-            self.init_single_hotkey("F5", self.broker.worker.go_notice)
+            self.init_single_hotkey("Alt-F5", self.broker.worker.go_notice)
             self.init_single_hotkey("F10", self.broker.worker.so_notice)
             self.init_single_hotkey("F11", self.broker.worker.si_notice)
 
