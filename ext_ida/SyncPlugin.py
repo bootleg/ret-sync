@@ -175,7 +175,7 @@ class RequestHandler(object):
 
     # rebase address with respect to local image base
     def rebase(self, base, offset):
-        if base:
+        if base is not None:
             # check for non-compliant debugger client
             if base > offset:
                 print "[sync] unsafe addr"
