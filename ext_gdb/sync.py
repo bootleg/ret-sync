@@ -141,11 +141,11 @@ def get_pc():
 
 class Tunnel():
 
-    def __init__(self, host):
-        print("[sync] Initializing tunnel to IDA using %s:%d..." % (host, PORT))
+    def __init__(self, host, port):
+        print("[sync] Initializing tunnel to IDA using %s:%d..." % (host, port))
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.connect((host, PORT))
+            self.sock.connect((host, port))
         except socket.error as msg:
             self.sock.close()
             self.sock = None
@@ -270,7 +270,7 @@ class Poller(threading.Thread):
 
 class Sync(gdb.Command):
 
-    def __init__(self, host, ctx=None):
+    def __init__(self, host, port, ctx=None):
         gdb.Command.__init__(self, "sync", gdb.COMMAND_OBSCURE, gdb.COMPLETE_NONE)
         self.ctx = ctx
         self.pid = None
@@ -280,6 +280,7 @@ class Sync(gdb.Command):
         self.tunnel = None
         self.poller = None
         self.host = host
+        self.port = port
         gdb.events.exited.connect(self.exit_handler)
         gdb.events.cont.connect(self.cont_handler)
         gdb.events.stop.connect(self.stop_handler)
@@ -388,10 +389,11 @@ class Sync(gdb.Command):
             self.tunnel = None
 
         if not self.tunnel:
+
             if arg == "":
                 arg = self.host
 
-            self.tunnel = Tunnel(arg)
+            self.tunnel = Tunnel(arg, self.port)
             if not self.tunnel.is_up():
                 print("[sync] sync failed")
                 return
@@ -800,7 +802,7 @@ if __name__ == "__main__":
             print("[sync] configuration file loaded %s:%s" % (HOST, PORT))
             break
 
-    sync = Sync(HOST)
+    sync = Sync(HOST, PORT)
     Syncoff(sync)
     Cmt(sync)
     Rcmt(sync)
