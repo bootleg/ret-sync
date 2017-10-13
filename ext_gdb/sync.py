@@ -31,6 +31,7 @@ import errno
 import base64
 import tempfile
 import threading
+import json
 import gdb
 try:
     import configparser
@@ -69,7 +70,7 @@ def gdb_execute(cmd):
 
 
 def get_pid(ctx=None):
-    if ctx != None and "pid" in ctx.keys():
+    if (ctx is not None) and ("pid" in ctx.keys()):
         return ctx["pid"]
 
     inferiors = gdb.inferiors()
@@ -83,7 +84,7 @@ def get_pid(ctx=None):
 def get_maps(verbose=True, ctx=None):
     "Return list of maps (start, end, permissions, file name) via /proc"
 
-    if ctx != None and "mappings" in ctx.keys():
+    if (ctx is not None) and ("mappings" in ctx.keys()):
         return ctx["mappings"]
 
     pid = get_pid(ctx=ctx)
@@ -156,7 +157,7 @@ class Tunnel():
         self.sync = True
 
     def is_up(self):
-        return (self.sock != None and self.sync == True)
+        return (self.sock is not None and self.sync is True)
 
     def poll(self):
         if not self.is_up():
@@ -354,14 +355,14 @@ class Sync(gdb.Command):
 
     def cont_handler(self, event):
         if self.tunnel:
-            if self.poller != None:
+            if self.poller is not None:
                 self.poller.disable()
         return ''
 
     def stop_handler(self, event):
         if self.tunnel:
             self.locate()
-            if self.poller != None:
+            if self.poller is not None:
                 self.poller.enable()
         return ''
 
@@ -405,7 +406,7 @@ class Sync(gdb.Command):
             print('(update)')
 
         self.locate()
-        if self.poller != None:
+        if self.poller is not None:
             self.poller.enable()
 
 
@@ -517,6 +518,7 @@ class Bc(gdb.Command):
         self.sync.tunnel.send("[notice]{\"type\":\"bc\",\"msg\":\"%s\",\"base\":%d,\"offset\":%d}\n" %
             (arg, self.sync.base, self.sync.offset))
 
+
 class Cmd(gdb.Command):
 
     def __init__(self, sync):
@@ -534,6 +536,7 @@ class Cmd(gdb.Command):
         b64_output = base64.b64encode(cmd_output).decode()
         self.sync.tunnel.send("[sync] {\"type\":\"cmd\",\"msg\":\"%s\", \"base\":%d,\"offset\":%d}\n" % (b64_output, self.sync.base, self.sync.offset))
         print("[sync] command output:\n%s" % cmd_output.strip())
+
 
 class Rln(gdb.Command):
 
@@ -565,6 +568,7 @@ class Rln(gdb.Command):
         # Re-enable tunnel polling
         self.sync.create_poll_timer()
 
+
 symtable = {}
 class Bbt(gdb.Command):
 
@@ -580,7 +584,7 @@ class Bbt(gdb.Command):
         bt = gdb.execute("bt", to_string=True)
         bt = bt.split("\n")
         bt = [l.split() for l in bt]
-        bt = bt[:-1] # remove [] at the end
+        bt = bt[:-1]  # remove [] at the end
 
         for l in bt:
             try:
@@ -591,7 +595,7 @@ class Bbt(gdb.Command):
             if symbol == '??':
 
                 # Do not update each request. XXX - have an updatedb command for that?
-                #if raddr in symtable.keys():
+                # if raddr in symtable.keys():
                 #    continue
 
                 # First disable tunnel polling for commands (happy race...)
@@ -607,7 +611,7 @@ class Bbt(gdb.Command):
                 # Poll tunnel
                 msg = self.sync.tunnel.poll()
 
-                symtable[raddr] = msg[:-1] # remove \n at the end
+                symtable[raddr] = msg[:-1]  # remove \n at the end
 
         # Re-enable tunnel polling
         self.sync.create_poll_timer()
@@ -628,6 +632,7 @@ class Bbt(gdb.Command):
 
         bt = "\n".join([" ".join(l) for l in bt])
         print(bt)
+
 
 class Bx(gdb.Command):
 
@@ -674,6 +679,7 @@ class Bx(gdb.Command):
 
         gdb.execute("x %s 0x%x" % (fmt, raddr+offset))
 
+
 class Cc(gdb.Command):
 
     def __init__(self, sync):
@@ -701,7 +707,7 @@ class Cc(gdb.Command):
         # Re-enable tunnel polling
         self.sync.create_poll_timer()
 
-        time.sleep(0.150) # necessary to avoid garbage in res from gdb.execute()?
+        time.sleep(0.150)  # necessary to avoid garbage in res from gdb.execute()?
 
         # Set a breakpoint to cursor address in IDA
         res = gdb.execute("b *0x%x" % ida_cursor, to_string=True)
@@ -728,6 +734,7 @@ class Cc(gdb.Command):
                 print("[sync] reached other breakpoint before cc reached 0x%x" % ida_cursor)
         else:
             print("[sync] failed to remove breakpoint because gdb did not give us any info :/")
+
 
 class Patch(gdb.Command):
 
@@ -757,10 +764,11 @@ class Patch(gdb.Command):
                 res = gdb.execute("x /gx 0x%x" % (addr+8*i), to_string=True)
             elif length == 4:
                 res = gdb.execute("x /wx 0x%x" % (addr+4*i), to_string=True)
-            res = res.rstrip() # remove EOL
+            res = res.rstrip()  # remove EOL
             value = int(res.split("\t")[1], 16)
             self.sync.tunnel.send("[sync]{\"type\":\"patch\",\"addr\":%d,\"value\":%d, \"len\": %d}\n" %
             (addr+length*i, value, length))
+
 
 class Help(gdb.Command):
 
@@ -789,19 +797,32 @@ class Help(gdb.Command):
 
 
 if __name__ == "__main__":
-    locations = [os.path.join(os.path.realpath(os.path.dirname(__file__)), ".sync"),
+    ctx = None
+
+    locations = [os.path.join(os.path.expanduser(os.path.dirname(__file__)), ".sync"),
                  os.path.join(os.environ['HOME'], ".sync")]
 
     for confpath in locations:
         if os.path.exists(confpath):
-            config = configparser.SafeConfigParser({'host': HOST, 'port': PORT})
+            config = configparser.SafeConfigParser({'host': HOST, 'port': PORT, 'ctx': None})
             config.read(confpath)
-            HOST = config.get("INTERFACE", 'host')
-            PORT = config.getint("INTERFACE", 'port')
-            print("[sync] configuration file loaded %s:%s" % (HOST, PORT))
+            print("[sync] configuration file loaded from: %s" % confpath)
+
+            if config.has_section("INTERFACE"):
+                HOST = config.get("INTERFACE", 'host')
+                PORT = config.getint("INTERFACE", 'port')
+                print("       interface: %s:%s" % (HOST, PORT))
+
+            if config.has_section("INIT"):
+                ctx = config.get("INIT", 'context')
+                if ctx is not None:
+                    # eval() for fun
+                    ctx = eval(ctx)
+                    print("[sync] initialization context:\n%s\n" % json.dumps(ctx, indent=4))
+
             break
 
-    sync = Sync(HOST, PORT)
+    sync = Sync(HOST, PORT, ctx)
     Syncoff(sync)
     Cmt(sync)
     Rcmt(sync)

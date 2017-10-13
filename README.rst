@@ -112,7 +112,7 @@ Use it
 
 1. Open IDB
 
-2. IDA File->Script File -> SyncPlugin.py::
+2. ``IDA File`` -> ``Script File`` -> ``SyncPlugin.py``::
 
     [sync] form create
     [*] initBroker, "Y:\Python27\python.exe" -u "Y:\sync\broker.py" --idb "target.exe"
@@ -169,12 +169,12 @@ Use it
    Please note, if you modify the input field while the sync is active, you have to re-register
    with the dispatcher; this can be done simply by using the "``Restart``" button.
 
-   Please note that it is possible to alias by default using the ``.sync config`` file::
+   Please note that it is possible to alias by default using the ``.sync`` config file::
 
        [<ida_root_filename>]
        name=<alias name>
 
-   The section name is the idb's root file name and has only one option: "``name``".
+   The section name is the idb's root file name and has only one option: ``name``.
 
 
 7. Use WinDbg and enjoy IDA's activity
@@ -196,7 +196,7 @@ Extra commands
 
 * **!cmt [-a address] <string>**
 
-  Add comment at current eip in IDA:::
+  Add comment at current eip in IDA::
 
     [WinDbg]
     0:000:x86> pr
@@ -219,7 +219,7 @@ Extra commands
 
 * **!rcmt [-a address]**
 
-  Reset comment at current ip in IDA:::
+  Reset comment at current ip in IDA::
 
     [WinDbg]
     0:000:x86> !rcmt
@@ -267,7 +267,7 @@ Extra commands
 
 * **!cmd <string>**
 
-  Execute a command in WinDbg and add its output as comment at current eip in IDA:::
+  Execute a command in WinDbg and add its output as comment at current eip in IDA::
 
     [WinDbg]
     0:000:x86> pr
@@ -294,7 +294,7 @@ Extra commands
 
 * **!idblist**
 
-  Get list of all IDB clients connected to the dispatcher:::
+  Get list of all IDB clients connected to the dispatcher::
 
     [WinDbg]
     0:000> !idblist
@@ -303,7 +303,7 @@ Extra commands
 
 * **!syncmodauto <on|off>**
 
-  Enable/disable idb auto switch based on module name:::
+  Enable/disable idb auto switch based on module name::
 
     [WinDbg]
     0:000> !syncmodauto off
@@ -315,7 +315,7 @@ Extra commands
 * **!idbn <n>**
 
   Set active idb to the nth client. n should be a valid decimal value.
-  This is a semi-automatic mode (personal tribute to the tremendous jj).::
+  This is a semi-automatic mode (personal tribute to the tremendous jj)::
 
     [WinDbg]
     0:000:> !idbn 0
@@ -365,7 +365,7 @@ Extra commands
 
 * **!ks**
 
-  This command is a DML enhanced output of 'kv' command. Code Addresses are clickable (!jmpto) as well as data addresses (dc).
+  This command is a DML enhanced output of **kv** command. Code Addresses are clickable (!jmpto) as well as data addresses (dc).
 
 * **!translate <base> <addr> <mod>**
 
@@ -375,9 +375,9 @@ Extra commands
 Address optional argument
 +++++++++++++++++++++++++
 
-!cmt, !rcmt and !fcmt commands support an optional address option: -a or --address.
+**!cmt**, **!rcmt** and **!fcmt** commands support an optional address option: ``-a`` or ``--address``.
 Address should be passed as an hexadecimal value. Command parsing is based on python's
-module argparse. To stop line parsing use ``--``.::
+module ``argparse``. To stop line parsing use ``--``.::
 
     [WinDbg]
     0:000:x86> !cmt -a 0x430DB2 comment
@@ -406,7 +406,9 @@ These commands are only available when the current idb is active. When possible 
 GNU gdb (GDB)
 -------------
 
-GDB has also been heavily tested. We only describe a subset of the capabilities. Refer to WinDbg commands for a more complete description of what is supported.
+GDB has also been heavily tested. We only describe a subset of the
+capabilities. Refer to WinDbg commands for a more complete description of what
+is supported.
 
 Use it
 ++++++
@@ -456,7 +458,7 @@ Use it
 
 * **bbt**
 
-  Beautiful backtrace. Similar to **bt** but requests symbols from IDA:::
+  Beautiful backtrace. Similar to **bt** but requests symbols from IDA::
 
     (gdb) bt
     #0  0x0000000000a91a73 in ?? ()
@@ -484,7 +486,7 @@ Use it
 * **cc**
 
   Continue to cursor in IDA. This is an alternative to using F3 to set a one-shot breakpoint and
-  F5 to continue. This is useful if you prefer to do it from gdb:::
+  F5 to continue. This is useful if you prefer to do it from gdb::
 
     (gdb) b* 0xA91A73
     Breakpoint 1 at 0xa91a73
@@ -501,48 +503,25 @@ Use it
 Override PID, memory mappings
 +++++++++++++++++++++++++++++
 
-In some scenario such as debugging embedded devices over serial, gdb is not aware of the PID and cannot access
-`/proc/<pid>/maps`. In this case, we import a different script than sync.py in gdb. This script is quite simple and imports sync.py. The only difference is we create a context that is passed to `Sync()` when instanciating the object.
-It allows overriding some fields such as the pid or mappings but others could be added if required.
+In some scenarios, such as debugging embedded devices over serial or raw
+firmware in QEMU, gdb is not aware of the PID and cannot access
+``/proc/<pid>/maps``.
 
-custom_sync.py::
+In these cases, it is possible to pass a custom context to the plugin through
+the ``INIT`` section of the ``.sync`` configuration file. It allows overriding
+some fields such as the PID and memory mappings.
 
-    from sync import *
+``.sync`` content extract::
 
-    if __name__ == "__main__":
+    [INIT]
+    context = {
+          "pid": 200,
+          "mappings": [ [0x400000, 0x7A81158, 0x7681158, "asav941-200.qcow2|lina"] ]
+      }
 
-        locations = [os.path.join(os.path.realpath(os.path.dirname(__file__)), ".sync"),
-                     os.path.join(os.environ['HOME'], ".sync")]
 
-        for confpath in locations:
-            if os.path.exists(confpath):
-                config = configparser.SafeConfigParser({'host': HOST, 'port': PORT})
-                config.read(confpath)
-                HOST = config.get("INTERFACE", 'host')
-                PORT = config.getint("INTERFACE", 'port')
-                print("[sync] configuration file loaded %s:%s" % (HOST, PORT))
-                break
+Each entry in the mappings is: ``mem_base``, ``mem_end``, ``mem_size``, ``mem_name``.
 
-        ctx = {
-            "pid": 200,
-            "mappings": [ [0x400000, 0x7A81158, 0x7681158, "asav941-200.qcow2|lina"] ]
-        }
-
-        sync = Sync(HOST, ctx=ctx)
-
-        Syncoff(sync)
-        Cmt(sync)
-        Rcmt(sync)
-        Fcmt(sync)
-        Bc(sync)
-        Translate(sync)
-        Cmd(sync)
-        Rln(sync)
-        Bbt(sync)
-        Bx(sync)
-        Cc(sync)
-        Patch(sync)
-        Help()
 
 
 LLDB
@@ -550,7 +529,7 @@ LLDB
 
 LLDB support is experimental, however:
 
-0. Load extension (can also be added in ~/.lldbinit)::
+0. Load extension (can also be added in ``~/.lldbinit``)::
 
     lldb> command script import sync
 
