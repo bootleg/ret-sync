@@ -312,7 +312,7 @@ class Sync(gdb.Command):
 
         if not self.pid:
             self.pid = get_pid(ctx=self.ctx)
-            if not self.pid:
+            if self.pid is None:
                 print("[sync] failed to get pid")
                 return
             else:
@@ -389,7 +389,6 @@ class Sync(gdb.Command):
             self.tunnel = None
 
         if not self.tunnel:
-
             if arg == "":
                 arg = self.host
 
