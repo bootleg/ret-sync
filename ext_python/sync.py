@@ -118,8 +118,11 @@ class Rln:
     def invoke(self, raddr):
         if not self.sync.base:
             print("[sync] process not synced, command is dropped")
-            return
+            return "-"
         self.sync.locate(raddr)
+
+        if raddr == None or self.sync.offset == None:
+            return "-"
 
         # XXX - we don't support a rebase yet
         self.sync.tunnel.send("[sync]{\"type\":\"rln\",\"raddr\":%d,\"rbase\":%d,\"base\":%d,\"offset\":%d}\n" %
