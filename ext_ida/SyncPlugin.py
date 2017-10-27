@@ -615,7 +615,7 @@ class RequestHandler(object):
             if self.is_active:
                 req_handler(hash)
             else:
-                print "[-] Drop the request because idb is not enabled"
+                print "[-] Dropping %s request because idb is not enabled" % type
                 return
 
         idaapi.refresh_idaview_anyway()
