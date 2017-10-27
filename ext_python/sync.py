@@ -116,17 +116,20 @@ class Rln:
 
     # raddr: integer
     def invoke(self, raddr):
-        if not self.sync.base:
-            print("[sync] process not synced, command is dropped")
-            return "-"
+        # We won't always be synced and don't care, just want it to find an
+        # addr name
+#        if not self.sync.base:
+#            print("[sync] process not synced, command is dropped")
+#            return "-"
         self.sync.locate(raddr)
 
         if raddr == None or self.sync.offset == None:
             return "-"
 
-        # XXX - we don't support a rebase yet
+        # XXX - For now we just send the rbase to the base, which seems to work
+        # not sure this is entirely correct
         self.sync.tunnel.send("[sync]{\"type\":\"rln\",\"raddr\":%d,\"rbase\":%d,\"base\":%d,\"offset\":%d}\n" %
-            (raddr, 0x0, self.sync.base, self.sync.offset))
+            (raddr, self.sync.base, self.sync.base, self.sync.offset))
 
         # Let time for the IDB client to reply if it exists
         # Need to give it more time than usual to avoid "Resource temporarily unavailable"
@@ -172,8 +175,9 @@ class Sync:
 
             self.tunnel.send("[sync]{\"type\":\"loc\",\"base\":%d,\"offset\":%d}\n" % (self.base, self.offset))
         else:
-            print("[sync] unknown module at current PC: 0x%x" % self.offset)
-            print("[sync] NOTE: will resume sync when at a known module address")
+            # XXX - Don't want this spamming python scripts
+#            print("[sync] unknown module at current PC: 0x%x" % self.offset)
+#            print("[sync] NOTE: will resume sync when at a known module address")
             self.base = None
             self.offset = None
 

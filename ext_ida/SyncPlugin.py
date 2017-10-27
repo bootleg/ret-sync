@@ -171,7 +171,13 @@ class RequestHandler(object):
 
     # check if address is within a valid segment
     def is_safe(self, offset):
-        return not (idc.SegStart(offset) == idaapi.BADADDR)
+        is_safe = False
+        try: 
+            if idc.SegStart(offset) != idaapi.BADADDR:
+                is_safe = True
+        except AssertionError:
+            pass
+        return is_safe
 
     # rebase address with respect to local image base
     def rebase(self, base, offset):
