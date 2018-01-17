@@ -64,7 +64,10 @@ def show_last_exception():
         if PYTHON_MAJOR==2:
             filename, lineno, method, code = fs
         else:
-            filename, lineno, method, code = fs.filename, fs.lineno, fs.name, fs.line
+            try:
+                filename, lineno, method, code = fs.filename, fs.lineno, fs.name, fs.line
+            except:
+                filename, lineno, method, code = fs
 
         print("""{} File "{}", line {:d}, in {}()""".format(down_arrow, filename,
                                                             lineno, method))
@@ -139,10 +142,14 @@ def get_maps(verbose=True, ctx=None):
     return maps
 
 
+FAKE_SYNC = False
 def get_mod_by_addr(maps, addr):
     for mod in maps:
         if (addr > mod[0]) and (addr < mod[1]):
             return [mod[0], mod[3]]
+    if FAKE_SYNC:
+        print("[sync] Faking sync...")
+        return [maps[0][0], maps[0][3]]
     return None
 
 
@@ -166,10 +173,16 @@ def get_pc():
 class Tunnel():
 
     def __init__(self, host, port):
-        print("[sync] Initializing tunnel to IDA using %s:%d..." % (host, port))
+        self.host = host
+        self.port = port
+        print("[sync] Instanciating Tunnel() for %s:%d..." % (self.host, self.port))
+        self.init()
+        
+    def init(self):
+        print("[sync] Initializing tunnel to IDA using %s:%d..." % (self.host, self.port))
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.connect((host, port))
+            self.sock.connect((self.host, self.port))
         except socket.error as msg:
             self.sock.close()
             self.sock = None
@@ -203,7 +216,7 @@ class Tunnel():
 
     def send(self, msg):
         if not self.sock:
-            print("[sync] tunnel_send: tunnel is unavailable (did you forget to sync ?)")
+            print("[sync] tunnel_send: tunnel is unavailable (did you forget to sync ?: %s)" % str(self.sync))
             return
 
         try:
@@ -279,6 +292,7 @@ class Poller(threading.Thread):
             if batch:
                 gdb.post_event(Runner(batch))
         else:
+            print("[[sync]] Warning: going to syncoff??")
             gdb.post_event(Runner(['syncoff']))
             self.stop()
 
@@ -669,7 +683,8 @@ class Bbt(gdb.Command):
 
                 # Poll tunnel
                 msg = self.sync.tunnel.poll()
-
+                if not msg:
+                    continue
                 symtable[raddr] = msg[:-1]  # remove \n at the end
 
         # Re-enable tunnel polling
