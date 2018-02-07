@@ -364,7 +364,7 @@ class RequestHandler(object):
 
         print("[*] 0x%x -  0x%x - 0x%x - 0x%x" % (raddr, rbase, offset, base))
 
-        addr = self.rebase(rbase, raddr)
+        addr = self.rebase(base, raddr)
         if not addr:
             print("[*] could not rebase this address (0x%x)" % raddr)
             return
