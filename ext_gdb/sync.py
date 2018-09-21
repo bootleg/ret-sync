@@ -819,7 +819,8 @@ class Cc(gdb.Command):
             else:
                 print("[sync] reached other breakpoint before cc reached 0x%x" % ida_cursor)
         else:
-            print("[sync] failed to remove breakpoint because gdb did not give us any info :/")
+            print("[sync] gdb did not give us any info but removing bp anyway")
+            res = gdb.execute("d %d" % bp_id)
 
 
 class Patch(gdb.Command):
