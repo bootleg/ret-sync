@@ -15,6 +15,7 @@ From IDA and static analysis we got:
 * macro view over modules
 * code analysis, signatures, types, etc.
 * fancy graph view
+* Hex-Rays pseudocode view
 * persistent storage of knowledge within IDBs
 
 
@@ -77,6 +78,18 @@ included in Python standard libraries for release >= 2.7.
 
 
 
+
+Global shortcuts
+----------------
+
+* Ctrl-Shift-S  - Toggle global syncing
+* Ctrl-H  - Toggle Hex-Rays syncing
+
+Two buttons are also available in the Debug toolbar.
+
+
+
+
 WinDbg
 ------
 
@@ -99,7 +112,7 @@ Use it
    * ``HOST`` in ``broker.py``, localhost is the default interface.
 
    ``broker.py`` and ``sync.dll`` check for a configuration file named ``.sync`` in user's home directory.
-   (IDA's side broker.py and dispatcher.py actually look for the configuration file in the IDB's
+   (IDA's side ``broker.py`` and ``dispatcher.py`` actually look for the configuration file in the IDB's
    directory first).
    Content of this file overwrite default values. It should respect a ``.ini`` file format::
 
@@ -282,7 +295,7 @@ Extra commands
     .text:00430DB1    push    edi             ; edi=00000064
 
 
-* **!bc <||on|off|set 0xBBGGRR>>**
+* **!bc <||on|off|set 0xBBGGRR>**
 
   Enable/disable path coloring in IDA. This is NOT a code tracing tool,
   there are efficient tools for that. Each manually stepped instruction is
@@ -617,7 +630,7 @@ TODO
 KNOWN BUGS/LIMITATIONS
 -----------------------
 
-- Tested with Python 2.7, IDA 6.4 to 7.0 (Windows, Linux and Mac OS X), GNU gdb (GDB) 7.4.1 (Debian), lldb 310.2.37.
+- Tested with Python 2.7, IDA 6.4 to 7.2 (Windows, Linux and Mac OS X), GNU gdb (GDB) 7.4.1 (Debian), lldb 310.2.37.
 - **THERE IS NO AUTHENTICATION/ENCRYPTION** or whatsoever between the parties; you're on your own.
 - Self modifying code is out of scope.
 

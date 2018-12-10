@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016-2017, Alexandre Gazet.
+# Copyright (C) 2016-2018, Alexandre Gazet.
 #
 # Copyright (C) 2012-2015, Quarkslab.
 #
@@ -29,7 +29,6 @@ import traceback
 import struct
 import binascii
 import base64
-import ctypes
 import socket
 import ConfigParser
 
@@ -42,7 +41,10 @@ except:
 import idaapi
 import idautils
 import ida_graph
+import ida_hexrays
 from idaapi import PluginForm
+
+from syncrays import Syncrays
 
 
 # Enable/disable logging JSON received in the IDA output window
@@ -99,7 +101,7 @@ COL_BLUE_NAVY = 0x000080
 COL_GRAY = 0x808080
 
 COL_CURLINE = COL_YLW
-#COL_CURLINE = COL_BLUE_NAVY # renders better with some themes
+# COL_CURLINE = COL_BLUE_NAVY # renders better with some themes
 COL_CBTRACE = COL_GREEN
 
 NETNODE_STORE = "$ SYNC_STORE"
@@ -237,12 +239,15 @@ class RequestHandler(object):
         if not ea:
             return
 
-        if(self.color):
+        if self.color:
             self.cb_color(ea)
 
         idaapi.jumpto(ea)
         self.cb_curline(ea)
         self.gm.center()
+
+        if self.hexsync.enabled:
+            self.hexsync.cb_loc(ea)
 
     # log command output request at addr
     def req_cmd(self, hash):
@@ -774,6 +779,7 @@ class RequestHandler(object):
         print "[sync] module base 0x%x" % self.base
         self.base_remote = None
         self.gm = GraphManager()
+        self.hexsync = Syncrays()
         self.parser = parser
         self.broker_sock = None
         self.is_active = False
@@ -814,7 +820,7 @@ class Broker(QtCore.QProcess):
         states = ["Not running", "Starting", "Running"]
         print "[*] broker new state: ", states[new_state]
         if states[new_state] == "Not running":
-            print "[*] Check dispatcher.py.err if you think this is an error"
+            print "    Check dispatcher.py.err if you think this is an error"
 
     def cb_broker_on_out(self):
         # readAllStandardOutput() returns QByteArray
@@ -916,6 +922,21 @@ class GraphManager():
 # --------------------------------------------------------------------------
 
 
+class CheckBoxActionHandler(idaapi.action_handler_t):
+    def __init__(self, cb):
+        idaapi.action_handler_t.__init__(self)
+        self.cb = cb
+
+    def activate(self, ctx):
+        self.cb.toggle()
+        return 1
+
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
+
+# --------------------------------------------------------------------------
+
 class SyncForm_t(PluginForm):
 
     def cb_broker_started(self):
@@ -926,9 +947,9 @@ class SyncForm_t(PluginForm):
         print "[*] broker finished"
         if self.broker:
             self.broker.worker.stop()
-            self.cb.stateChanged.disconnect(self.cb_change_state)
-            self.cb.toggle()
-            self.cb.stateChanged.connect(self.cb_change_state)
+            self.cb_sync.stateChanged.disconnect(self.cb_change_state)
+            self.cb_sync.toggle()
+            self.cb_sync.stateChanged.connect(self.cb_change_state)
 
         self.btn.setText("Start")
 
@@ -980,6 +1001,7 @@ class SyncForm_t(PluginForm):
             self.init_single_hotkey("Alt-F5", self.broker.worker.go_notice)
             self.init_single_hotkey("F10", self.broker.worker.so_notice)
             self.init_single_hotkey("F11", self.broker.worker.si_notice)
+            self.init_single_hotkey("Ctrl-F1", self.broker.worker.export_bp_notice)
 
     def init_single_hotkey(self, key, fnCb):
         ctx = idaapi.add_hotkey(key, fnCb)
@@ -1001,10 +1023,10 @@ class SyncForm_t(PluginForm):
 
     def cb_btn_restart(self):
         print "[sync] restarting broker."
-        if self.cb.checkState() == QtCore.Qt.Checked:
-            self.cb.toggle()
+        if self.cb_sync.checkState() == QtCore.Qt.Checked:
+            self.cb_sync.toggle()
             time.sleep(0.1)
-        self.cb.toggle()
+        self.cb_sync.toggle()
 
     def cb_change_state(self, state):
         if state == QtCore.Qt.Checked:
@@ -1017,22 +1039,41 @@ class SyncForm_t(PluginForm):
                 self.smooth_kill()
             print "[*] sync disabled\n"
 
+    def cb_hexrays_sync_state(self, state):
+        if self.broker:
+            if state == QtCore.Qt.Checked:
+                print "[*] hexrays sync enabled\n"
+                self.broker.worker.hexsync.enable()
+            else:
+                print "[*] hexrays sync disabled\n"
+                self.broker.worker.hexsync.disable()
+
+    def cb_hexrays_toggle(self):
+        print "cb_hexrays_toggle"
+        self.cb_hexrays.toggle()
+
     def OnCreate(self, form):
         print "[sync] form create"
 
         # Get parent widget
         parent = self.FormToPyQtWidget(form)
 
-        # Create checkbox
-        self.cb = QtWidgets.QCheckBox("Synchronization enable")
-        self.cb.move(20, 20)
-        self.cb.stateChanged.connect(self.cb_change_state)
+        # Create global sync checkbox
+        self.cb_sync = QtWidgets.QCheckBox("Synchronization enable")
+        self.cb_sync.move(20, 20)
+        self.cb_sync.stateChanged.connect(self.cb_change_state)
+
+        # Create hexrays sync checkbox
+        self.cb_hexrays = QtWidgets.QCheckBox("Hex-Rays Synchronization enable")
+        self.cb_hexrays.move(20, 20)
+        self.cb_hexrays.stateChanged.connect(self.cb_hexrays_sync_state)
 
         # Create label
         label = QtWidgets.QLabel('Overwrite idb name:')
 
         name = idaapi.get_root_filename()
         print "[sync] default idb name: %s" % name
+
         # Check in conf for name overwrite
         confpath = os.path.join(os.path.realpath(IDB_PATH), '.sync')
         if os.path.exists(confpath):
@@ -1056,31 +1097,64 @@ class SyncForm_t(PluginForm):
 
         # Create layout
         layout = QtWidgets.QGridLayout()
-        layout.addWidget(self.cb)
+        layout.addWidget(self.cb_sync)
+        layout.addWidget(self.cb_hexrays)
         layout.addWidget(label)
         layout.addWidget(self.input)
         layout.addWidget(self.btn, 2, 2)
-        layout.setColumnStretch(3, 1)
-        layout.setRowStretch(3, 1)
+        layout.setColumnStretch(4, 1)
+        layout.setRowStretch(4, 1)
         parent.setLayout(layout)
 
-        # workaround: crash when instanciated in Broker.__init__
-        # weird interaction with Qtxxx libraries ?
-        #  File "C:\Python27\Lib\argparse.py", line 1584, in __init__
-        #    self._positionals = add_group(_('positional arguments'))
-        #  File "C:\Python27\Lib\gettext.py", line 566, in gettext
-        #    return dgettext(_current_domain, message)
-        #  TypeError: 'NoneType' object is not callable
         self.parser = argparse.ArgumentParser()
         self.parser.add_argument("-a", "--address", nargs=1, action='store')
         self.parser.add_argument('msg', nargs=argparse.REMAINDER)
 
         # Synchronization is enabled by default
-        self.cb.toggle()
+        self.cb_sync.toggle()
+
+        # Register action for hexrays sync
+        action_hex_sync_desc = idaapi.action_desc_t(
+            'hexrays_sync_toogle:action',
+            'Toggle Hex-Rays syncing',
+            CheckBoxActionHandler(self.cb_hexrays),
+            'Ctrl+H',
+            'Toggle Hex-Rays syncing',
+            198)
+
+        idaapi.register_action(action_hex_sync_desc)
+        idaapi.attach_action_to_toolbar(
+            "DebugToolBar",
+            'hexrays_sync_toogle:action')
+
+        # Register action for global sync
+        action_g_sync_desc = idaapi.action_desc_t(
+            'g_sync_toogle:action',
+            'Toggle syncing',
+            CheckBoxActionHandler(self.cb_sync),
+            'Ctrl+Shift+S',
+            'Toggle syncing',
+            203)
+
+        idaapi.register_action(action_g_sync_desc)
+        idaapi.attach_action_to_toolbar(
+            "DebugToolBar",
+            'g_sync_toogle:action')
 
     def OnClose(self, form):
         print "[sync] form close"
         self.smooth_kill()
+
+        idaapi.unregister_action('hexrays_sync_toogle:action')
+        idaapi.detach_action_from_toolbar(
+            "DebugToolBar",
+            'hexrays_sync_toogle:action')
+
+        idaapi.unregister_action('g_sync_toogle:action')
+        idaapi.detach_action_from_toolbar(
+            "DebugToolBar",
+            'g_sync_toogle:action')
+
         global SyncForm
         del SyncForm
 
