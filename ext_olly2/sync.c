@@ -209,6 +209,8 @@ SetHardwareBreakpoint(char *command, BOOL oneshot)
     wchar_t *address = NULL;
     unsigned long type;
 
+	UNREFERENCED_PARAMETER(oneshot);
+
     #if VERBOSE >= 2
     dbgout("[sync] SetHardwareBreakpoint: %s\n", command);
     #endif
@@ -662,11 +664,24 @@ static int Mdisablesync(t_table *pt, wchar_t *name, ulong index, int mode)
 //
 // Add or edit Comment / Label at address.
 //
-static int MCommentAndLabel(t_table *pt,wchar_t *name,ulong index,int mode)
+static int MCommentAndLabel(t_table *pt, wchar_t *name, ulong index, int mode)
 {
-    int retVal = MENU_ABSENT;
-    wchar_t buffer[TEXTLEN];
-    wchar_t nameBuffer[TEXTLEN];
+	HRESULT hRes;
+	t_dump* dump;
+	t_module* cur_mod;
+	ulong saveType = DT_NONE;
+	int retVal = MENU_ABSENT;
+	int findNameResult;
+	int copiedBytes = 0;
+	int column = 0;
+	int letter = 0;
+	POINT point;
+	PSTR args = NULL;
+	PWSTR wargs = NULL;
+	wchar_t buffer[TEXTLEN];
+	wchar_t nameBuffer[TEXTLEN];
+
+	UNREFERENCED_PARAMETER(name);
 
     switch(mode)
     {
@@ -679,13 +694,7 @@ static int MCommentAndLabel(t_table *pt,wchar_t *name,ulong index,int mode)
         //execute menu item
     case MENU_EXECUTE:
         {
-            t_dump* dump;
-            int findNameResult;
-            int copiedBytes;
-            ulong saveType;
-            int column;
-            int letter = 0;
-            POINT point;
+
 
             nameBuffer[0] = L'\0';
 
@@ -769,14 +778,10 @@ static int MCommentAndLabel(t_table *pt,wchar_t *name,ulong index,int mode)
                 //send to IDA (iif synch is ON)
                 if(g_Synchronized)
                 {
-                    PSTR args = NULL;
-                    PWSTR wargs = NULL;
-                    t_module* module;
-                    HRESULT hRes;
+                   // get module description according to current selection
+                   cur_mod = Findmodule(dump->sel0);
 
-                    // get module description according to current selection
-                   module = Findmodule(dump->sel0);
-                   if(!module)
+                   if(!cur_mod)
                    {
                        dbgout("[-] Couldn't find any module for address: %#p\n", dump->sel0);
                        goto __resumethreads;
@@ -795,10 +800,14 @@ static int MCommentAndLabel(t_table *pt,wchar_t *name,ulong index,int mode)
                    if(SUCCEEDED(hRes))
                    {
                        // send comment to IDA
-                       if(index == NM_COMMENT)
-                           TunnelSend("[sync]{\"type\":\"cmt\",\"msg\":\"%s\",\"base\":%lu,\"offset\":%lu}\n", args, module->base, dump->sel0);
-                       else if (index == NM_LABEL)// send label to IDA
-                       TunnelSend("[sync]{\"type\":\"lbl\",\"msg\":\"%s\",\"base\":%lu,\"offset\":%lu}\n", args, module->base, dump->sel0);
+					   if (index == NM_COMMENT)
+					   {
+						   TunnelSend("[sync]{\"type\":\"cmt\",\"msg\":\"%s\",\"base\":%lu,\"offset\":%lu}\n", args, cur_mod->base, dump->sel0);
+					   }
+					   else if (index == NM_LABEL)// send label to IDA
+					   {
+						   TunnelSend("[sync]{\"type\":\"lbl\",\"msg\":\"%s\",\"base\":%lu,\"offset\":%lu}\n", args, cur_mod->base, dump->sel0);
+					   }
                    }
 
                    // whatever happened, free the buffers

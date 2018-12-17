@@ -1,0 +1,20 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{FE3AC8DD-4BFC-4445-8D1D-C37502DE48C7}") = "ret-sync", "Sync.vcxproj", "{FE3AC8DD-4BFC-4445-8D1D-C37502DE48C7}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FE3AC8DD-4BFC-4445-8D1D-C37502DE48C7}.Debug|Win32.ActiveCfg = Debug|Win32
+		{FE3AC8DD-4BFC-4445-8D1D-C37502DE48C7}.Debug|Win32.Build.0 = Debug|Win32
+		{FE3AC8DD-4BFC-4445-8D1D-C37502DE48C7}.Release|Win32.ActiveCfg = Release|Win32
+		{FE3AC8DD-4BFC-4445-8D1D-C37502DE48C7}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
