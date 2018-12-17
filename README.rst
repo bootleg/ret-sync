@@ -82,8 +82,8 @@ included in Python standard libraries for release >= 2.7.
 Global shortcuts
 ----------------
 
-* Ctrl-Shift-S  - Toggle global syncing
-* Ctrl-H  - Toggle Hex-Rays syncing
+* ``Ctrl-Shift-S``  - Toggle global syncing
+* ``Ctrl-H``  - Toggle Hex-Rays syncing
 
 Two buttons are also available in the Debug toolbar.
 
@@ -404,16 +404,17 @@ IDA bindings over WinDbg commands:
 
 ``Syncplugin.py`` also registers WinDbg command wrapper hotkeys.
 
-* F2  - Set breakpoint at cursor address
-* F3  - Set one-shot breakpoint at cursor address
-* Ctrl-F2  - Set hardware breakpoint at cursor address
-* Ctrl-F3  - Set one-shot hardware breakpoint at cursor address
-* Alt-F2 - Translate (rebase in debugger) current cursor address
-* Alt-F5  - Go
-* F10 - Single step
-* F11 - Single trace
+* ``F2``  - Set breakpoint at cursor address
+* ``F3``  - Set one-shot breakpoint at cursor address
+* ``Ctrl-F2``  - Set hardware breakpoint at cursor address
+* ``Ctrl-F3``  - Set one-shot hardware breakpoint at cursor address
+* ``Alt-F2`` - Translate (rebase in debugger) current cursor address
+* ``Alt-F5``  - Go
+* ``F10`` - Single step
+* ``F11`` - Single trace
 
-These commands are only available when the current idb is active. When possible they have also been implemented for others debuggers.
+These commands are only available when the current idb is active. When
+possible they have also been implemented for others debuggers.
 
 
 GNU gdb (GDB)

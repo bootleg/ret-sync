@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -15,18 +15,19 @@
     <SccLocalPath />
     <ProjectName>ret-sync</ProjectName>
     <ProjectGuid>{BBBBBBBB-FFFF-EEEE-CCCC-AAAAAAAAAAAA}</ProjectGuid>
+    <WindowsTargetPlatformVersion>10.0.15063.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
@@ -44,7 +45,6 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <OutDir>Debug\</OutDir>
     <IntDir>Debug\</IntDir>
-    <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>Release\</OutDir>
@@ -56,7 +56,6 @@
     <ClCompile>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <InlineFunctionExpansion>Default</InlineFunctionExpansion>
-      <FunctionLevelLinking>false</FunctionLevelLinking>
       <Optimization>Disabled</Optimization>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <WarningLevel>Level3</WarningLevel>
@@ -70,6 +69,7 @@
       <AdditionalOptions> /J</AdditionalOptions>
       <StructMemberAlignment>1Byte</StructMemberAlignment>
       <CompileAs>CompileAsC</CompileAs>
+      <ErrorReporting>None</ErrorReporting>
     </ClCompile>
     <Midl>
       <SuppressStartupBanner>true</SuppressStartupBanner>
@@ -94,8 +94,10 @@
       <ImportLibrary>
       </ImportLibrary>
       <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
-      <ModuleDefinitionFile>Ollydbg.def</ModuleDefinitionFile>
+      <ModuleDefinitionFile>
+      </ModuleDefinitionFile>
       <LinkErrorReporting>NoErrorReport</LinkErrorReporting>
+      <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -115,6 +117,8 @@
       <AdditionalOptions> /J</AdditionalOptions>
       <StructMemberAlignment>1Byte</StructMemberAlignment>
       <CompileAs>CompileAsC</CompileAs>
+      <DebugInformationFormat>None</DebugInformationFormat>
+      <ErrorReporting>None</ErrorReporting>
     </ClCompile>
     <Midl>
       <SuppressStartupBanner>true</SuppressStartupBanner>
@@ -143,8 +147,8 @@
       <AdditionalDependencies>OLLYDBG.LIB;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalOptions>%(AdditionalOptions)</AdditionalOptions>
       <AdditionalLibraryDirectories>$(VC_SourcePath);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <ModuleDefinitionFile>Ollydbg.def</ModuleDefinitionFile>
-      <LinkStatus>false</LinkStatus>
+      <ModuleDefinitionFile>
+      </ModuleDefinitionFile>
       <ShowProgress>NotSet</ShowProgress>
       <LinkErrorReporting>NoErrorReport</LinkErrorReporting>
       <GenerateWindowsMetadata>false</GenerateWindowsMetadata>
@@ -163,9 +167,6 @@
   </ItemGroup>
   <ItemGroup>
     <Library Include="OLLYDBG.LIB" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="Ollydbg.def" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

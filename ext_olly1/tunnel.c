@@ -128,7 +128,7 @@ ToBase64(const BYTE *pbBinary, DWORD cbBinary, LPSTR *pszString)
 {
 	BOOL bRes = FALSE;
 	HRESULT hRes = S_OK;
-	DWORD cchString;
+	DWORD cchString = 0;
 
 	bRes = CryptBinaryToStringA(pbBinary, cbBinary, CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, NULL, &cchString);
 	if (!bRes)
