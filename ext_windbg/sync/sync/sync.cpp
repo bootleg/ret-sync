@@ -1525,7 +1525,7 @@ modmd5(LPSTR *hexhash)
     HCRYPTHASH hHash = NULL;
     BYTE *pbHashData = NULL;
     BYTE buffer[BUFSIZE];
-    DWORD cbHash;
+    DWORD cbHash = 0;
     DWORD cbRead = 0;
     BOOL bResult = FALSE;
 
