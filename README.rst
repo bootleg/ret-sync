@@ -70,13 +70,11 @@ For owner of older versions, this plugin makes use of PySide (Python + Qt) bindi
 - http://www.hex-rays.com/products/ida/support/download.shtml
 - for installation notes see: http://www.hexblog.com/?p=333
 
-A development environment (preferably Visual Studio 2013 or greater) is required
+A development environment (preferably Visual Studio 2017) is required
 to build the WinDbg's extension (see "**Build it**" section).
 
 Python is required by various scripts. ``argparse`` is
 included in Python standard libraries for release >= 2.7.
-
-
 
 
 Global shortcuts
@@ -89,6 +87,14 @@ Two buttons are also available in the Debug toolbar.
 
 
 
+Binary release
+--------------
+
+Pre-built binaries are proposed through an ``Azure DevOps`` pipeline: |Build Status| . Simply select the last build and check the ``Artifacts`` button.
+
+.. |Build Status| image:: https://dev.azure.com/bootlegdev/ret-sync-release/_apis/build/status/ret-sync-release-CI?branchName=master
+   :target: https://dev.azure.com/bootlegdev/ret-sync-release/_build/latest?definitionId=8?branchName=master
+
 
 WinDbg
 ------
@@ -97,8 +103,8 @@ WinDbg
 Build it
 ++++++++
 
-Use the Visual Studio 2013 solution provided in ``ext_windbg``,
-(see http://www.visualstudio.com/en-us/news/vs2013-community-vs.aspx if needed).
+Use the Visual Studio 2017 solution provided in ``ext_windbg``,
+(see https://docs.microsoft.com/en-us/visualstudio/releasenotes/vs2017-relnotes if needed).
 
 
 
@@ -378,11 +384,11 @@ Extra commands
 
 * **!ks**
 
-  This command is a DML enhanced output of **kv** command. Code Addresses are clickable (!jmpto) as well as data addresses (dc).
+  This command is a DML enhanced output of **kv** command. Code Addresses are clickable (**!jmpto**) as well as data addresses (**dc**).
 
 * **!translate <base> <addr> <mod>**
 
-  Meant to be used from IDA (Alt-F2 shortcut), rebase an address with respect to its module's name and offset.
+  Meant to be used from IDA (``Alt-F2`` shortcut), rebase an address with respect to its module's name and offset.
 
 
 Address optional argument
@@ -499,8 +505,8 @@ Use it
 
 * **cc**
 
-  Continue to cursor in IDA. This is an alternative to using F3 to set a one-shot breakpoint and
-  F5 to continue. This is useful if you prefer to do it from gdb::
+  Continue to cursor in IDA. This is an alternative to using ``F3`` to set a one-shot breakpoint and ``F5``
+  to continue. This is useful if you prefer to do it from gdb::
 
     (gdb) b* 0xA91A73
     Breakpoint 1 at 0xa91a73
@@ -576,26 +582,26 @@ OllyDbg 1.10
 OllyDbg 1.10 support is experimental, however:
 
 0. Build the plugin using the VS solution
-1. Copy the dll within Olly's plugin directory
-2. Use Plugins menu or shortcuts to enable (ALT+s)/disable (ALT+u)
+1. Copy the dll within OllyDbg's plugin directory
+2. Use Plugins menu or shortcuts to enable (``Alt+s``)/disable (``Alt+u``)
    synchronization.
 
 
 OllyDbg2
----------
+--------
 
 OllyDbg2 support is experimental, however:
 
 0. Build the plugin using the VS solution
-1. Copy the dll within Olly's plugin directory
-2. Use Plugins menu or shortcuts to enable (CTRL+s)/disable (CTRL+u)
+1. Copy the dll within OllyDbg2's plugin directory
+2. Use Plugins menu or shortcuts to enable (``Ctrl+s``)/disable (``Ctrl+u``)
    synchronization.
 
-Due to the beta status of Olly2 API, only the following features have been implemented:
+Due to the beta status of OllyDbg2 API, only the following features have been implemented:
 
-- Graph sync [use F7; F8 for stepping]
-- Comment   [use CTRL+;]
-- Label     [use CTRL+:]
+- Graph sync [use ``F7``; ``F8`` for stepping]
+- Comment   [use ``CTRL+;``]
+- Label     [use ``CTRL+:``]
 
 
 x64dbg
@@ -605,14 +611,14 @@ Based on testplugin,  https://github.com/x64dbg/testplugin. x64dbg support is ex
 
 0. Build the plugin using the VS solution
 
-   Please note that plugin sdk is not redistributed with the solution.
-   A copy can be found in each release of x64dbg.
+   May you need a different version of the plugin sdk,
+   a copy can be found in each release of x64dbg.
 
    Paste the "``pluginsdk``" directory into "``ext_x64dbg\x64dbg_sync``"
 
 1. Copy the dll (extension is ``.d32`` or ``.dp64``) within x64dbg's plugin directory.
 
-2. Use commands to enable ("!sync") or disable ("!syncoff") synchronization.
+2. Use commands to enable ("``!sync"``) or disable ("``!syncoff``") synchronization.
 
 Extend
 ------
