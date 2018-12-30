@@ -33,6 +33,8 @@ import tempfile
 import threading
 import json
 import gdb
+import traceback
+
 try:
     import configparser
 except ImportError:
@@ -46,6 +48,30 @@ PORT = 9100
 
 TIMER_PERIOD = 0.2
 
+# Borrowed from gef
+def show_last_exception():
+    PYTHON_MAJOR = sys.version_info[0]
+    horizontal_line = "-"
+    right_arrow = "->"
+    down_arrow = "\\->"
+
+    print("")
+    exc_type, exc_value, exc_traceback = sys.exc_info()
+    print(" Exception raised ".center(80, horizontal_line))
+    print("{}: {}".format(exc_type.__name__, exc_value))
+    print(" Detailed stacktrace ".center(80, horizontal_line))
+    for fs in traceback.extract_tb(exc_traceback)[::-1]:
+        if PYTHON_MAJOR==2:
+            filename, lineno, method, code = fs
+        else:
+            try:
+                filename, lineno, method, code = fs.filename, fs.lineno, fs.name, fs.line
+            except:
+                filename, lineno, method, code = fs
+
+        print("""{} File "{}", line {:d}, in {}()""".format(down_arrow, filename,
+                                                            lineno, method))
+        print("   {}    {}".format(right_arrow, code))
 
 # function gdb_execute courtesy of StalkR
 # Wrapper when gdb.execute(cmd, to_string=True) does not work
@@ -116,10 +142,14 @@ def get_maps(verbose=True, ctx=None):
     return maps
 
 
+FAKE_SYNC = False
 def get_mod_by_addr(maps, addr):
     for mod in maps:
         if (addr > mod[0]) and (addr < mod[1]):
             return [mod[0], mod[3]]
+    if FAKE_SYNC:
+        print("[sync] Faking sync...")
+        return [maps[0][0], maps[0][3]]
     return None
 
 
@@ -143,10 +173,16 @@ def get_pc():
 class Tunnel():
 
     def __init__(self, host, port):
-        print("[sync] Initializing tunnel to IDA using %s:%d..." % (host, port))
+        self.host = host
+        self.port = port
+        print("[sync] Instanciating Tunnel() for %s:%d..." % (self.host, self.port))
+        self.init()
+        
+    def init(self):
+        print("[sync] Initializing tunnel to IDA using %s:%d..." % (self.host, self.port))
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.connect((host, port))
+            self.sock.connect((self.host, self.port))
         except socket.error as msg:
             self.sock.close()
             self.sock = None
@@ -180,7 +216,7 @@ class Tunnel():
 
     def send(self, msg):
         if not self.sock:
-            print("[sync] tunnel_send: tunnel is unavailable (did you forget to sync ?)")
+            print("[sync] tunnel_send: tunnel is unavailable (did you forget to sync ?: %s)" % str(self.sync))
             return
 
         try:
@@ -256,6 +292,7 @@ class Poller(threading.Thread):
             if batch:
                 gdb.post_event(Runner(batch))
         else:
+            print("[[sync]] Warning: going to syncoff??")
             gdb.post_event(Runner(['syncoff']))
             self.stop()
 
@@ -386,6 +423,12 @@ class Sync(gdb.Command):
             print(e)
 
     def invoke(self, arg, from_tty):
+        try:
+            self.invoke_(arg, from_tty)
+        except Exception as e:
+            show_last_exception()
+
+    def invoke_(self, arg, from_tty):
         if self.tunnel and not self.tunnel.is_up():
             self.tunnel = None
 
@@ -477,6 +520,12 @@ class Translate(gdb.Command):
         self.sync = sync
 
     def invoke(self, arg, from_tty):
+        try:
+            self.invoke_(arg, from_tty)
+        except Exception as e:
+            show_last_exception()
+
+    def invoke_(self, arg, from_tty):
         if not self.sync.base:
             print("[sync] process not synced, command is dropped")
             return
@@ -504,6 +553,12 @@ class Bc(gdb.Command):
         self.sync = sync
 
     def invoke(self, arg, from_tty):
+        try:
+            self.invoke_(arg, from_tty)
+        except Exception as e:
+            show_last_exception()
+
+    def invoke_(self, arg, from_tty):
         if not self.sync.base:
             print("[sync] process not synced, command is dropped")
             return
@@ -526,6 +581,12 @@ class Cmd(gdb.Command):
         self.sync = sync
 
     def invoke(self, arg, from_tty):
+        try:
+            self.invoke_(arg, from_tty)
+        except Exception as e:
+            show_last_exception()
+
+    def invoke_(self, arg, from_tty):
         if not self.sync.base:
             print("[sync] process not synced, command is dropped")
             return
@@ -545,6 +606,12 @@ class Rln(gdb.Command):
         self.sync = sync
 
     def invoke(self, arg, from_tty):
+        try:
+            self.invoke_(arg, from_tty)
+        except Exception as e:
+            show_last_exception()
+
+    def invoke_(self, arg, from_tty):
         if not self.sync.base:
             print("[sync] process not synced, command is dropped")
             return
@@ -577,6 +644,12 @@ class Bbt(gdb.Command):
         self.sync = sync
 
     def invoke(self, arg, from_tty):
+        try:
+            self.invoke_(arg, from_tty)
+        except Exception as e:
+            show_last_exception()
+
+    def invoke_(self, arg, from_tty):
         if not self.sync.base:
             print("[sync] process not synced, command is dropped")
             return
@@ -610,7 +683,8 @@ class Bbt(gdb.Command):
 
                 # Poll tunnel
                 msg = self.sync.tunnel.poll()
-
+                if not msg:
+                    continue
                 symtable[raddr] = msg[:-1]  # remove \n at the end
 
         # Re-enable tunnel polling
@@ -641,6 +715,12 @@ class Bx(gdb.Command):
         self.sync = sync
 
     def invoke(self, arg, from_tty):
+        try:
+            self.invoke_(arg, from_tty)
+        except Exception as e:
+            show_last_exception()
+
+    def invoke_(self, arg, from_tty):
         if not self.sync.base:
             print("[sync] process not synced, command is dropped")
             return
@@ -687,6 +767,12 @@ class Cc(gdb.Command):
         self.sync = sync
 
     def invoke(self, arg, from_tty):
+        try:
+            self.invoke_(arg, from_tty)
+        except Exception as e:
+            show_last_exception()
+
+    def invoke_(self, arg, from_tty):
         if not self.sync.base:
             print("[sync] process not synced, command is dropped")
             return
@@ -733,7 +819,8 @@ class Cc(gdb.Command):
             else:
                 print("[sync] reached other breakpoint before cc reached 0x%x" % ida_cursor)
         else:
-            print("[sync] failed to remove breakpoint because gdb did not give us any info :/")
+            print("[sync] gdb did not give us any info but removing bp anyway")
+            res = gdb.execute("d %d" % bp_id)
 
 
 class Patch(gdb.Command):
@@ -743,6 +830,12 @@ class Patch(gdb.Command):
         self.sync = sync
 
     def invoke(self, arg, from_tty):
+        try:
+            self.invoke_(arg, from_tty)
+        except Exception as e:
+            show_last_exception()
+
+    def invoke_(self, arg, from_tty):
         if not self.sync.base:
             print("[sync] process not synced, command is dropped")
             return

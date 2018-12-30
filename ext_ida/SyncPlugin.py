@@ -173,7 +173,13 @@ class RequestHandler(object):
 
     # check if address is within a valid segment
     def is_safe(self, offset):
-        return not (idc.SegStart(offset) == idaapi.BADADDR)
+        is_safe = False
+        try: 
+            if idc.SegStart(offset) != idaapi.BADADDR:
+                is_safe = True
+        except AssertionError:
+            pass
+        return is_safe
 
     # rebase address with respect to local image base
     def rebase(self, base, offset):
@@ -363,7 +369,7 @@ class RequestHandler(object):
 
         print("[*] 0x%x -  0x%x - 0x%x - 0x%x" % (raddr, rbase, offset, base))
 
-        addr = self.rebase(rbase, raddr)
+        addr = self.rebase(base, raddr)
         if not addr:
             print("[*] could not rebase this address (0x%x)" % raddr)
             return
@@ -627,7 +633,7 @@ class RequestHandler(object):
             if self.is_active:
                 req_handler(hash)
             else:
-                print "[-] Drop the request because idb is not enabled"
+                print "[-] Dropping %s request because idb is not enabled" % type
                 return
 
         idaapi.refresh_idaview_anyway()

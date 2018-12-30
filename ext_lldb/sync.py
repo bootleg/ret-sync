@@ -63,6 +63,7 @@ CMD_CLS = {CMD_NOTICE: "notice", CMD_SYNC: "sync"}
 class Tunnel():
 
     def __init__(self, host):
+        print("[sync] Initializing tunnel to IDA using %s:%d..." % (host, PORT))
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.connect((host, PORT))
