@@ -43,7 +43,7 @@ Content
 - ``ext_olly1``: OllyDbg 1.10 plugin
 - ``ext_olly2``: OllyDbg v2 plugin
 - ``ext_x64dbg``: x64dbg plugin
-
+- ``ext_ghidra``: Ghidra plugin
 - ``ext_ida/SyncPlugin.py``: IDA plugin, receive async events from broker
 - ``ext_ida/broker.py``:
 
@@ -65,7 +65,9 @@ Prerequisites
 
 Since IDA 6.9, IDAPython moved from PySide to PyQt5. No prerequisite in that situation.
 
-For owner of older versions, this plugin makes use of PySide (Python + Qt) binding. Depending on your version (PySide is shipped by default since IDA 6.6), you may need to look at:
+For owner of older versions, this plugin makes use of PySide (Python + Qt)
+binding. Depending on your version (PySide is shipped by default since IDA
+6.6), you may need to look at:
 
 - http://www.hex-rays.com/products/ida/support/download.shtml
 - for installation notes see: http://www.hexblog.com/?p=333
@@ -423,6 +425,30 @@ These commands are only available when the current idb is active. When
 possible they have also been implemented for others debuggers.
 
 
+
+Ghidra
+------
+
+Ghidra is a software reverse engineering (SRE) suite of tools developed by
+NSA's Research Directorate, it can be used alternatively or in complement with
+IDA.
+
+``ext_ghidra`` is a server extension as ``ext_ida``. It uses the same ``.sync``
+configuration files and implements the same protocol, thus all the  debugger
+extensions (WinDbg/GDB/LLDB/OllyDbg/OllyDbg2/x64dbg) are compatible.
+
+1. Compile the extension or copy ``ZIP`` from ``ext_ghidra/dist``to ``$GHIDRA_DIR/Extensions/Ghidra/``
+2. ``File`` -> ``Install Extensions...``
+3. Use toolbar icons or shortcuts to enable (``Alt+s``)/disable (``Alt+Shift+s``)/restart (``Alt+r``)
+   synchronization.
+
+A status window is also available from ``Windows`` -> ``RetSyncPlugin``.
+
+Only a subset of commands (hopefully the most important ones) have been
+implemented so far.
+
+
+
 GNU gdb (GDB)
 -------------
 
@@ -681,6 +707,6 @@ GREETZ
 ------
 
 Hail to Bruce Dang, StalkR, @Ivanlef0u, Damien Aumaître, Sébastien Renaud and
-Kévin Szkudlapski, @_m00dy_, @saidelike for their kindness, help, feedbacks
-and thoughts. Ilfak Guilfanov and Igor Skochinsky for their help with IDA's
-internals.
+Kévin Szkudlapski, @_m00dy_, @saidelike, Xavier Mehrenberger, for their
+kindness, help, feedbacks and thoughts. Ilfak Guilfanov and Igor Skochinsky
+for their help with IDA's internals.

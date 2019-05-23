@@ -81,6 +81,19 @@ def get_pid(ctx=None):
     raise Exception("get_pid(): failed to find program's pid")
 
 
+def coalesce_space(maps, next_start, next_name):
+    if len(maps) == 0:
+        return False
+
+    start, end, size, name = maps[-1]
+
+    # contiguous spaces
+    if (end == next_start) and (name == next_name):
+        return True
+
+    return False
+
+
 def get_maps(verbose=True, ctx=None):
     "Return list of maps (start, end, permissions, file name) via /proc"
 
@@ -107,7 +120,14 @@ def get_maps(verbose=True, ctx=None):
                 name = (' ').join(e[4:])
                 e = e[:4] + [name]
                 start, end, size, offset, name = e
-                maps.append([int(start, 16), int(end, 16), int(size, 16), name])
+
+                new_entry = [int(start, 16), int(end, 16), int(size, 16), name]
+
+                if coalesce_space(maps, new_entry[0], name):
+                    maps[-1][1] = new_entry[1]
+                    maps[-1][2] += new_entry[2]
+                else:
+                    maps.append(new_entry)
 
     except Exception as e:
         print(e)
@@ -125,7 +145,7 @@ def get_mod_by_addr(maps, addr):
 
 def get_mod_by_name(maps, name):
     for mod in maps:
-        if os.path.basename(mod[3]) == name:
+        if os.path.basename(mod[3]) == os.path.basename(name):
             return [mod[0], mod[3]]
     return None
 
@@ -144,12 +164,14 @@ class Tunnel():
 
     def __init__(self, host, port):
         print("[sync] Initializing tunnel to IDA using %s:%d..." % (host, port))
+        self.sock = None
+
         try:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.connect((host, port))
+            self.sock = socket.create_connection((host, port), 4)
         except socket.error as msg:
-            self.sock.close()
-            self.sock = None
+            if self.sock:
+                self.sock.close()
+                self.sock = None
             self.sync = False
             print("[sync] Tunnel initialization  error: %s" % msg)
             return None
@@ -320,6 +342,7 @@ class Sync(gdb.Command):
                 print("[sync] pid: %s" % self.pid)
 
         self.offset = offset
+
         mod = self.mod_info(self.offset)
         if mod:
             if VERBOSE >= 2:
@@ -437,7 +460,7 @@ class Cmt(gdb.Command):
             return
 
         self.sync.tunnel.send("[sync]{\"type\":\"cmt\",\"msg\":\"%s\",\"base\":%d,\"offset\":%d}\n" %
-            (arg, self.sync.base, self.sync.offset))
+                              (arg, self.sync.base, self.sync.offset))
 
 
 class Fcmt(gdb.Command):
@@ -452,7 +475,7 @@ class Fcmt(gdb.Command):
             return
 
         self.sync.tunnel.send("[sync]{\"type\":\"fcmt\",\"msg\":\"%s\",\"base\":%d,\"offset\":%d}\n" %
-            (arg, self.sync.base, self.sync.offset))
+                              (arg, self.sync.base, self.sync.offset))
 
 
 class Rcmt(gdb.Command):
@@ -467,7 +490,7 @@ class Rcmt(gdb.Command):
             return
 
         self.sync.tunnel.send("[sync]{\"type\":\"rcmt\",\"msg\":\"%s\",\"base\":%d,\"offset\":%d}\n" %
-            (arg, self.sync.base, self.sync.offset))
+                              (arg, self.sync.base, self.sync.offset))
 
 
 class Translate(gdb.Command):
@@ -516,7 +539,7 @@ class Bc(gdb.Command):
             return
 
         self.sync.tunnel.send("[notice]{\"type\":\"bc\",\"msg\":\"%s\",\"base\":%d,\"offset\":%d}\n" %
-            (arg, self.sync.base, self.sync.offset))
+                              (arg, self.sync.base, self.sync.offset))
 
 
 class Cmd(gdb.Command):
@@ -556,7 +579,7 @@ class Rln(gdb.Command):
 
         # XXX - we don't support a rebase yet
         self.sync.tunnel.send("[sync]{\"type\":\"rln\",\"raddr\":%d,\"rbase\":%d,\"base\":%d,\"offset\":%d}\n" %
-            (raddr, 0x0, self.sync.base, self.sync.offset))
+                              (raddr, 0x0, self.sync.base, self.sync.offset))
 
         # Let time for the IDB client to reply if it exists
         time.sleep(0.150)
@@ -603,7 +626,7 @@ class Bbt(gdb.Command):
 
                 # XXX - we don't support a rebase yet
                 self.sync.tunnel.send("[sync]{\"type\":\"rln\",\"raddr\":%d,\"rbase\":%d,\"base\":%d,\"offset\":%d}\n" %
-                    (raddr, 0x0, self.sync.base, self.sync.offset))
+                                      (raddr, 0x0, self.sync.base, self.sync.offset))
 
                 # Let time for the IDB client to reply if it exists
                 time.sleep(0.150)
@@ -665,7 +688,7 @@ class Bx(gdb.Command):
 
         # XXX - we don't support a rebase yet
         self.sync.tunnel.send("[sync]{\"type\":\"rrln\",\"sym\":\"%s\",\"rbase\":%d,\"base\":%d,\"offset\":%d}\n" %
-            (sym, 0x0, self.sync.base, self.sync.offset))
+                              (sym, 0x0, self.sync.base, self.sync.offset))
 
         # Let time for the IDB client to reply if it exists
         time.sleep(0.150)
@@ -767,7 +790,7 @@ class Patch(gdb.Command):
             res = res.rstrip()  # remove EOL
             value = int(res.split("\t")[1], 16)
             self.sync.tunnel.send("[sync]{\"type\":\"patch\",\"addr\":%d,\"value\":%d, \"len\": %d}\n" %
-            (addr+length*i, value, length))
+                                  (addr+length*i, value, length))
 
 
 class Help(gdb.Command):
@@ -804,7 +827,7 @@ if __name__ == "__main__":
 
     for confpath in locations:
         if os.path.exists(confpath):
-            config = configparser.SafeConfigParser({'host': HOST, 'port': PORT, 'ctx': None})
+            config = configparser.SafeConfigParser({'host': HOST, 'port': PORT, 'context': ''})
             config.read(confpath)
             print("[sync] configuration file loaded from: %s" % confpath)
 
@@ -815,10 +838,12 @@ if __name__ == "__main__":
 
             if config.has_section("INIT"):
                 ctx = config.get("INIT", 'context')
-                if ctx is not None:
+                if ctx != '':
                     # eval() for fun
                     ctx = eval(ctx)
-                    print("[sync] initialization context:\n%s\n" % json.dumps(ctx, indent=4))
+                    print("[sync] initialization context:\n%s\n" % json.dumps(context, indent=4))
+                else:
+                    ctx = None
 
             break
 
