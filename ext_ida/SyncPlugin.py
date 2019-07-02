@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016-2018, Alexandre Gazet.
+# Copyright (C) 2016-2019, Alexandre Gazet.
 #
 # Copyright (C) 2012-2015, Quarkslab.
 #
@@ -30,89 +30,57 @@ import struct
 import binascii
 import base64
 import socket
-import ConfigParser
+
+try:
+    from ConfigParser import SafeConfigParser
+except ImportError:
+    from configparser import ConfigParser as SafeConfigParser
 
 try:
     import argparse
-except:
-    print "[-] please make sure python's argparse module is available\n%s" % repr(sys.exc_info())
-    sys.exit(0)
-
-import idaapi
-import idautils
-import ida_graph
-import ida_hexrays
-from idaapi import PluginForm
-
-from syncrays import Syncrays
-
-
-# Enable/disable logging JSON received in the IDA output window
-DEBUG_JSON = False
-
-if sys.platform == 'win32':
-    PYTHON_BIN = 'python.exe'
-    PYTHON_PATH = os.path.normpath("C:\\Python27")
-
-elif sys.platform.startswith('linux') or sys.platform == 'darwin':
-    PYTHON_BIN = 'python'
-    PYTHON_PATH = os.path.normpath("/usr/bin")
-
-else:
-    print "[-] please fix PYTHON_PATH & PYTHON_BIN values, %s platform currently unknown" % sys.platform
-    sys.exit(0)
-
-if not os.path.exists(os.path.join(PYTHON_PATH, PYTHON_BIN)):
-    print "[-] please fix PYTHON_PATH value"
-    sys.exit(0)
-
-
-site_packages = os.path.join(PYTHON_PATH, "lib", "site-packages")
-if site_packages not in sys.path:
-    sys.path.insert(0, site_packages)
-
-try:
-    from PyQt5 import QtCore, QtWidgets
-    from PyQt5.QtCore import QProcess, QProcessEnvironment
-except:
-    print "[-] failed to import Qt libs from PyQt5\n%s" % repr(sys.exc_info())
+except ImportError:
+    print("[-] please make sure python's argparse module is available\n%s" % repr(sys.exc_info()))
     sys.exit(0)
 
 try:
     import json
-except:
-    print "[-] failed to import json\n%s" % repr(sys.exc_info())
+except ImportError:
+    print("[-] failed to import json\n%s" % repr(sys.exc_info()))
     sys.exit(0)
 
+try:
+    from PyQt5 import QtCore, QtWidgets
+    from PyQt5.QtCore import QProcess, QProcessEnvironment
+except ImportError:
+    print("[-] failed to import Qt libs from PyQt5\n%s" % repr(sys.exc_info()))
+    sys.exit(0)
+
+import idc
+import idaapi
+import idautils
+import ida_graph
+import ida_hexrays
+import ida_kernwin
+
+from idaapi import PluginForm
+
+from retsync.syncrays import Syncrays
+import retsync.rsconfig as rsconfig
+
+
+# get PYTHON_PATH settings, based on platform
+PYTHON_PATH = rsconfig.get_python_interpreter()
+
 # default value is current script's path
-BROKER_PATH = os.path.join(os.path.normpath(os.path.dirname(__file__)), "broker.py")
+BROKER_PATH = os.path.join(os.path.normpath(os.path.dirname(__file__)), rsconfig.PLUGIN_DIR, "broker.py")
 if not os.path.exists(BROKER_PATH):
-    print "[-] broker path is not properly set, current value: <%s>" % BROKER_PATH
+    print("[-] broker path is not properly set, current value: <%s>" % BROKER_PATH)
     sys.exit(0)
 
 IDB_PATH = os.path.dirname(os.path.realpath(idc.GetIdbPath()))
 
-CONNECT_BROKER_MAX_ATTEMPT = 4
+COL_CBTRACE = rsconfig.COL_CBTRACE
 
-COL_GREEN = 0x33ff00
-COL_DEEP_PURPLE = 0xff44dd
-COL_YLW = 0x23ffff
-COL_BLUE_NAVY = 0x000080
-COL_GRAY = 0x808080
-
-COL_CURLINE = COL_YLW
-# COL_CURLINE = COL_BLUE_NAVY # renders better with some themes
-COL_CBTRACE = COL_GREEN
-
-NETNODE_STORE = "$ SYNC_STORE"
-NETNODE_INDEX = 0xFFC0DEFF
-
-DBG_DIALECTS = {
-    'windbg': {'prefix': '!', 'si': 't', 'so': 'p', 'go': 'g', 'bp': 'bp ', 'hbp': 'ba e 1 ', 'bp1': 'bp /1 ', 'hbp1': 'ba e 1 /1 '},
-    'gdb': {'prefix': '', 'si': 'si', 'so': 'ni', 'go': 'continue', 'bp': 'b *', 'hbp': 'hb *',  'bp1': 'tb *', 'hbp1': 'thb *'},
-    'ollydbg2': {'prefix': '', 'si': 'si', 'so': 'so', 'go': 'go', 'bp': 'bp ', 'hbp': 'xxx ', 'bp1': 'xxx ', 'hbp1': 'xxx '},
-    'x64_dbg': {'prefix': '', 'si': 'sti', 'so': 'sto', 'go': 'go', 'bp': 'bp ', 'hbp': 'bph ', 'bp1': 'xxx ', 'hbp1': 'xxx '},
-}
 
 # --------------------------------------------------------------------------
 
@@ -130,12 +98,12 @@ class RequestHandler(object):
             cur_color = idaapi.get_item_color(prev_ea)
             # race condition: block/instruction's color may have been modified
             # after it was saved
-            if (cur_color != prev_color) and (cur_color != COL_CURLINE):
+            if (cur_color != prev_color) and (cur_color != rsconfig.COL_CURLINE):
                 prev_color = cur_color
             idaapi.set_item_color(prev_ea, prev_color)
 
         self.prev_loc = [ea, idaapi.get_item_color(ea)]
-        idaapi.set_item_color(ea, COL_CURLINE)
+        idaapi.set_item_color(ea, rsconfig.COL_CURLINE)
 
     def cb_restore_last_line(self):
         if self.prev_loc:
@@ -149,8 +117,8 @@ class RequestHandler(object):
 
         try:
             args = self.parser.parse_args(msg.split())
-        except:
-            print "[*] failed to parse command"
+        except argparse.ArgumentError:
+            print("[*] failed to parse command")
             return [None, msg]
 
         # no address switch supplied
@@ -159,14 +127,14 @@ class RequestHandler(object):
 
         try:
             addr = int(''.join(args.address), 16)
-        except:
-            print "[*] failed to parse address, should be hex"
+        except (TypeError, ValueError):
+            print("[*] failed to parse address, should be hex")
             return [None, msg]
 
         # make sure the address points to a valid instruction/data
         head = idaapi.get_item_head(addr)
         if head != addr:
-            print "[*] ambiguous address, did you mean 0x%x ?" % head
+            print("[*] ambiguous address, did you mean 0x%x ?" % head)
             return [None, msg]
 
         return [addr, ' '.join(args.msg)]
@@ -180,7 +148,7 @@ class RequestHandler(object):
         if base is not None:
             # check for non-compliant debugger client
             if base > offset:
-                print "[sync] unsafe addr"
+                print("[sync] unsafe addr")
                 return None
 
             if not (self.base == base):
@@ -191,7 +159,7 @@ class RequestHandler(object):
                 self.base_remote = base
 
         if not self.is_safe(offset):
-            print "[sync] unsafe addr"
+            print("[sync] unsafe addr")
             return None
 
         return offset
@@ -221,10 +189,10 @@ class RequestHandler(object):
     # append comment and handle cmt's size limitation (near 1024)
     def append_cmt(self, ea, cmt, rptble=False):
         if len(cmt) > 1024:
-            print "[*] warning, comment needs to be splitted (from 0x%x)" % ea
+            print("[*] warning, comment needs to be splitted (from 0x%x)" % ea)
             nh = idaapi.next_head(ea, idaapi.BADADDR)
             if nh == idaapi.BADADDR:
-                print "[*] failed to find next instruction candidate"
+                print("[*] failed to find next instruction candidate")
                 return
 
             self.append_cmt(nh, cmt[1024:], rptble)
@@ -257,7 +225,7 @@ class RequestHandler(object):
         if not ea:
             return
 
-        print ("[*] cmd output added at 0x%x" % ea)
+        print("[*] cmd output added at 0x%x" % ea)
         self.append_cmt(ea, str(msg))
 
     # reset comment at addr
@@ -272,7 +240,7 @@ class RequestHandler(object):
             return
 
         idaapi.set_cmt(ea, str(''), False)
-        print ("[*] reset comment at 0x%x" % ea)
+        print("[*] reset comment at 0x%x" % ea)
 
     # add comment request at addr
     def req_cmt(self, hash):
@@ -286,7 +254,7 @@ class RequestHandler(object):
             return
 
         self.append_cmt(ea, str(msg))
-        print ("[*] comment added at 0x%x" % ea)
+        print("[*] comment added at 0x%x" % ea)
 
     # add a function comment at addr
     def req_fcmt(self, hash):
@@ -301,11 +269,11 @@ class RequestHandler(object):
 
         func = idaapi.get_func(ea)
         if not func:
-            print ("[*] could not find func for 0x%x" % ea)
+            print("[*] could not find func for 0x%x" % ea)
             return
 
         idaapi.set_func_cmt(func, str(msg), False)
-        print ("[*] function comment added at 0x%x" % ea)
+        print("[*] function comment added at 0x%x" % ea)
 
     # add an address comment request at addr
     def req_raddr(self, hash):
@@ -323,7 +291,7 @@ class RequestHandler(object):
             return
 
         self.append_cmt(ea, "0x%x (rebased from 0x%x)" % (addr, raddr))
-        print ("[*] comment added at 0x%x" % ea)
+        print("[*] comment added at 0x%x" % ea)
 
     # return current cursor in IDA Pro
     def req_cursor(self, hash):
@@ -355,7 +323,7 @@ class RequestHandler(object):
             if not idc.OpOff(addr, 0, 0):
                 print("[x] OpOff failed")
 
-        print ("[*] patched 0x%x = 0x%x (previous was 0x%x)" % (addr, value, prev_value))
+        print("[*] patched 0x%x = 0x%x (previous was 0x%x)" % (addr, value, prev_value))
 
     # return idb's symbol for a given address
     def req_rln(self, hash):
@@ -373,7 +341,7 @@ class RequestHandler(object):
             sym = self.demangle(sym)
             func = idaapi.get_func(addr)
             if not func:
-                print ("[*] could not find func for 0x%x" % addr)
+                print("[*] could not find func for 0x%x" % addr)
                 return
 
             lck = idaapi.lock_func(func)
@@ -393,9 +361,9 @@ class RequestHandler(object):
 
         if sym:
             self.notice_broker("cmd", "\"cmd\":\"%s\"" % sym)
-            print ("[*] resolved symbol: %s" % sym)
+            print("[*] resolved symbol: %s" % sym)
         else:
-            print ("[*] could not resolve symbol for address 0x%x" % addr)
+            print("[*] could not resolve symbol for address 0x%x" % addr)
 
     # return address for a given idb's symbol
     def req_rrln(self, hash):
@@ -406,9 +374,9 @@ class RequestHandler(object):
         addr = idc.LocByName(sym)
         if addr:
             self.notice_broker("cmd", "\"cmd\":\"%s\"" % addr)
-            print ("[*] resolved address: %s" % addr)
+            print("[*] resolved address: %s" % addr)
         else:
-            print ("[*] could not resolve address for symbol %s" % sym)
+            print("[*] could not resolve address for symbol %s" % sym)
 
     # add label request at addr
     def req_lbl(self, hash):
@@ -426,7 +394,7 @@ class RequestHandler(object):
             flags = idaapi.SN_LOCAL
 
         idaapi.set_name(ea, str(msg), flags)
-        print ("[*] label added at 0x%x" % ea)
+        print("[*] label added at 0x%x" % ea)
 
     # color request at addr
     def req_bc(self, hash):
@@ -441,41 +409,41 @@ class RequestHandler(object):
             ea = self.base
 
         if (msg == 'oneshot'):
-            print ("[*] color oneshot added at 0x%x" % ea)
+            print("[*] color oneshot added at 0x%x" % ea)
             # mark address as being colored
             self.prev_loc = [ea, COL_CBTRACE]
         elif (msg == 'on'):
-            print ("[*] color start from 0x%x" % ea)
+            print("[*] color start from 0x%x" % ea)
             self.color = True
             self.prev_loc = [ea, COL_CBTRACE]
         elif (msg == 'off'):
-            print ("[*] color end at 0x%x" % ea)
+            print("[*] color end at 0x%x" % ea)
             self.color = False
         elif (msg == 'set'):
             new_col = hash['rgb']
             if new_col > 0xffffff:
-                print ("[*] restoring color")
-                new_col = COL_GREEN
+                print("[*] restoring color")
+                new_col = rsconfig.COL_GREEN
 
             COL_CBTRACE = new_col
-            print ("[*] set color to 0x%x" % COL_CBTRACE)
+            print("[*] set color to 0x%x" % COL_CBTRACE)
         else:
-            print ("[*] invalid color request (%s)" % msg)
+            print("[*] invalid color request (%s)" % msg)
 
     # reload .bpcmds from idb
     def req_bps_get(self, hash):
-        print ("[-] reload .bpcmds")
-        node = idaapi.netnode(NETNODE_INDEX)
+        print("[-] reload .bpcmds")
+        node = idaapi.netnode(rsconfig.NETNODE_INDEX)
         if not node:
-            print ("[-] failed to open netnode store")
+            print("[-] failed to open netnode store")
             self.notice_broker("cmd", "\"cmd\":\"no blob\"")
             return
 
-        node.create(NETNODE_STORE)
+        node.create(rsconfig.NETNODE_STORE)
         blob = node.getblob(0, str(chr(1)))
 
         if not blob:
-            print ("  -> no blob")
+            print("  -> no blob")
             self.notice_broker("cmd", "\"cmd\":\"    -> reloading .bpcmds: no blob\"")
             return
 
@@ -485,16 +453,16 @@ class RequestHandler(object):
     # save .bpcmds to idb
     def req_bps_set(self, hash):
         blob = hash['msg']
-        print ("[-] save .bpcmds")
-        node = idaapi.netnode(NETNODE_INDEX)
+        print("[-] save .bpcmds")
+        node = idaapi.netnode(rsconfig.NETNODE_INDEX)
         if not node:
-            print ("[-] failed to open netnode store")
+            print("[-] failed to open netnode store")
             self.notice_broker("cmd", "\"cmd\":\"    -> failed to save .bpcmds")
             return
 
-        new = node.create(NETNODE_STORE)
+        new = node.create(rsconfig.NETNODE_STORE)
         if new == 0:
-            print ("    -> creating new netnode store")
+            print("    -> creating new netnode store")
 
         out = node.setblob(str(blob), 0, str(chr(1)))
         self.notice_broker("cmd", "\"cmd\":\"    -> .bpcmds saved\"")
@@ -506,17 +474,17 @@ class RequestHandler(object):
         remote = None
 
         if md5:
-            print ("[*] modcheck idb (md5)")
+            print("[*] modcheck idb (md5)")
             local = idc.GetInputMD5()
             remote = (''.join(str(md5).encode("ascii").split())).upper()
         elif pdb:
-            print ("[*] modcheck idb (pdb guid)")
+            print("[*] modcheck idb (pdb guid)")
             msg = base64.b64decode(pdb)
             local = DbgDirHlpr.read_rsds_codeview()
             remote = DbgDirHlpr.parse_itoldyouso_output(msg)
 
-        print ("    -> remote: <%s>" % remote)
-        print ("    -> local : <%s>" % local)
+        print("    -> remote: <%s>" % remote)
+        print("    -> local : <%s>" % local)
 
         if remote == "0":
             res = "[!] warning, no Debug Directory"
@@ -533,9 +501,9 @@ class RequestHandler(object):
     def req_set_dbg_dialect(self, hash):
         global SyncForm
         dialect = hash['dialect']
-        if dialect in DBG_DIALECTS:
-            self.dbg_dialect = DBG_DIALECTS[dialect]
-            print "[sync] set debugger dialect to %s, enabling hotkeys" % dialect
+        if dialect in rsconfig.DBG_DIALECTS:
+            self.dbg_dialect = rsconfig.DBG_DIALECTS[dialect]
+            print("[sync] set debugger dialect to %s, enabling hotkeys" % dialect)
             SyncForm.init_hotkeys()
         else:
             SyncForm.uninit_hotkeys()
@@ -546,39 +514,40 @@ class RequestHandler(object):
 
         if (subtype == 'msg'):
             # simple message announcement
-            print ("[*] << broker << %s" % hash['msg'])
+            print("[*] << broker << %s" % hash['msg'])
 
         elif(subtype == 'notice'):
             # notice from broker
             self.broker_port = int(hash['port'])
-            print ("[*] << broker << listening on port %d" % self.broker_port)
+            print("[*] << broker << listening on port %d" % self.broker_port)
 
-            for attempt in range(CONNECT_BROKER_MAX_ATTEMPT):
+            for attempt in range(rsconfig.CONNECT_BROKER_MAX_ATTEMPT):
                 try:
                     host = socket.gethostbyname('localhost')
                     self.broker_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    self.broker_sock.settimeout(2)
                     self.broker_sock.connect((host, self.broker_port))
                     break
-                except:
-                    print "[sync] failed to connect to broker"
+                except socket.error:
+                    print("[sync] failed to connect to broker")
                     print sys.exc_info()
                     if self.broker_sock:
                         self.broker_sock.close()
                     self.broker_sock = None
                     time.sleep(0.1)
-                    if (attempt == (CONNECT_BROKER_MAX_ATTEMPT - 1)):
+                    if (attempt == (rsconfig.CONNECT_BROKER_MAX_ATTEMPT - 1)):
                         self.announcement("[sync] failed to connect to broker (attempt %d)" % attempt)
                         sys.exit()
 
         # enable/disable idb, if disable it drops most sync requests
         elif(subtype == 'enable_idb'):
             self.is_active = True
-            print "[sync] idb is enabled"
+            print("[sync] idb is enabled")
 
         elif(subtype == 'disable_idb'):
             self.is_active = False
             self.cb_restore_last_line()
-            print "[sync] idb is disabled"
+            print("[sync] idb is disabled")
 
     # parse and execute request
     # Note that sometimes we don't receive the whole request from the broker.py
@@ -588,34 +557,35 @@ class RequestHandler(object):
     def parse_exec(self, req):
         if self.prev_req:
             if self.prev_req != "":
-                if DEBUG_JSON:
-                    print "[+] JSON merge with request: \"%s\"" % req
+                if rsconfig.DEBUG_JSON:
+                    print("[+] JSON merge with request: \"%s\"" % req)
 
             req = self.prev_req + req
             self.prev_req = ""
         if req == '':
             return
-        if DEBUG_JSON:
+        if rsconfig.DEBUG_JSON:
             print("parse_exec -> " + str(req))
 
         if not (req[0:6] == '[sync]'):
-            print "\[<] bad hdr %s" % repr(req)
-            print '[-] Request dropped due to bad header'
+            print("[<] bad hdr %s" % repr(req))
+            print("[-] Request dropped due to bad header")
             return
 
         req_ = self.normalize(req, 6)
+
         try:
             hash = json.loads(req_)
-        except:
-            if DEBUG_JSON:
-                print "[-] Sync failed to parse json\n '%s'. Caching for next req..." % req_
-                print "------------------------------------"
+        except ValueError:
+            if rsconfig.DEBUG_JSON:
+                print("[-] Sync failed to parse json\n '%s'. Caching for next req..." % req_)
+                print("------------------------------------")
             self.prev_req = req
             return
 
         type = hash['type']
         if type not in self.req_handlers:
-            print ("[*] unknown request: %s" % type)
+            print("[*] unknown request: %s" % type)
             return
 
         req_handler = self.req_handlers[type]
@@ -627,7 +597,7 @@ class RequestHandler(object):
             if self.is_active:
                 req_handler(hash)
             else:
-                print "[-] Drop the request because idb is not enabled"
+                print("[-] Drop the request because idb is not enabled")
                 return
 
         idaapi.refresh_idaview_anyway()
@@ -636,7 +606,7 @@ class RequestHandler(object):
         req = req[taglen:]
         req = req.replace("\\", "\\\\")
         req = req.replace("\n", "")
-        return req
+        return req.strip()
 
     # send a kill notice to the broker (then forwarded to the dispatcher)
     def kill_notice(self):
@@ -645,7 +615,7 @@ class RequestHandler(object):
     # send a bp command (F2) to the debugger (via the broker and dispatcher)
     def bp_notice(self, oneshot=False):
         if not self.is_active:
-            print "[sync] idb isn't enabled, bp can't be set"
+            print("[sync] idb isn't enabled, bp can't be set")
             return
 
         ea = idaapi.get_screen_ea()
@@ -653,12 +623,12 @@ class RequestHandler(object):
         cmd = "%s0x%x" % (self.dbg_dialect['bp1' if oneshot else 'bp'], offset)
 
         self.notice_broker("cmd", "\"cmd\":\"%s\"" % cmd)
-        print "[sync] >> set %s" % cmd
+        print("[sync] >> set %s" % cmd)
 
     # send a hardware bp command (Ctrl-F2) to the debugger (via the broker and dispatcher)
     def hbp_notice(self, oneshot=False):
         if not self.is_active:
-            print "[sync] idb isn't enabled, hbp can't be set"
+            print("[sync] idb isn't enabled, hbp can't be set")
             return
 
         ea = idaapi.get_screen_ea()
@@ -666,7 +636,7 @@ class RequestHandler(object):
         cmd = "%s0x%x" % (self.dbg_dialect['hbp1' if oneshot else 'hbp'], offset)
 
         self.notice_broker("cmd", "\"cmd\":\"%s\"" % cmd)
-        print "[sync] >> set %s" % cmd
+        print("[sync] >> set %s" % cmd)
 
     # send a oneshot bp command (F3) to the debugger (via the broker and dispatcher)
     def bp_oneshot_notice(self):
@@ -679,7 +649,7 @@ class RequestHandler(object):
     # export IDB's breakpoint (Ctrl-F1) to the debugger (via the broker and dispatcher)
     def export_bp_notice(self):
         if not self.dbg_dialect:
-            print "[sync] idb isn't synced yet, can't export bp"
+            print("[sync] idb isn't synced yet, can't export bp")
             return
 
         mod = self.name.split('.')[0].strip()
@@ -691,7 +661,7 @@ class RequestHandler(object):
             btype, cond, flags = [idc.GetBptAttr(ea, x) for x in attrs]
 
             if cond:
-                print "bp %d: conditional bp not supported" % i
+                print("bp %d: conditional bp not supported" % i)
             else:
                 if ((btype in [idc.BPT_EXEC, idc.BPT_SOFT]) and
                    ((flags & idc.BPT_ENABLED) != 0)):
@@ -700,14 +670,14 @@ class RequestHandler(object):
                     bp = self.dbg_dialect['hbp' if (btype == idc.BPT_EXEC) else 'bp']
                     cmd = "%s%s+0x%x" % (bp, mod, offset)
                     self.notice_broker("cmd", "\"cmd\":\"%s\"" % cmd)
-                    print "bp %d: %s" % (i, cmd)
+                    print("bp %d: %s" % (i, cmd))
 
-        print "[sync] export done"
+        print("[sync] export done")
 
     # send a translate command (Alt-F2) to the debugger (via the broker and dispatcher)
     def translate_notice(self):
         if not self.dbg_dialect:
-            print "[sync] idb isn't synced yet, can't translate"
+            print("[sync] idb isn't synced yet, can't translate")
             return
 
         ea = idaapi.get_screen_ea()
@@ -715,12 +685,12 @@ class RequestHandler(object):
         cmd = self.dbg_dialect['prefix'] + "translate 0x%x 0x%x %s" % (self.base, ea, mod)
 
         self.notice_broker("cmd", "\"cmd\":\"%s\"" % cmd)
-        print "[sync] translate address 0x%x" % ea
+        print("[sync] translate address 0x%x" % ea)
 
     # send a go command (Alt-F5) to the debugger (via the broker and dispatcher)
     def go_notice(self):
         if not self.is_active:
-            print "[sync] idb isn't enabled, can't go"
+            print("[sync] idb isn't enabled, can't go")
             return
 
         self.notice_broker("cmd", "\"cmd\":\"%s\"" % self.dbg_dialect['go'])
@@ -729,7 +699,7 @@ class RequestHandler(object):
     # send a single trace command (F11) to the debugger (via the broker and dispatcher)
     def si_notice(self):
         if not self.is_active:
-            print "[sync] idb isn't enabled, can't trace"
+            print("[sync] idb isn't enabled, can't trace")
             return
 
         self.notice_broker("cmd", "\"cmd\":\"%s\"" % self.dbg_dialect['si'])
@@ -738,7 +708,7 @@ class RequestHandler(object):
     # send a single step command (F10) to the debugger (via the broker and dispatcher)
     def so_notice(self):
         if not self.is_active:
-            print "[sync] idb isn't enabled, can't single step"
+            print("[sync] idb isn't enabled, can't single step")
             return
 
         self.notice_broker("cmd", "\"cmd\":\"%s\"" % self.dbg_dialect['so'])
@@ -756,7 +726,7 @@ class RequestHandler(object):
 
         try:
             self.broker_sock.sendall(notice)
-        except:
+        except socket.error:
             None
 
     def stop(self):
@@ -767,16 +737,16 @@ class RequestHandler(object):
         self.cb_restore_last_line()
         idaapi.refresh_idaview_anyway()
         self.is_active = False
-        print "[sync] idb is disabled"
+        print("[sync] idb is disabled")
 
     def __init__(self, parser):
         self.color = False
         self.prev_loc = None
         self.prev_node = None
         self.name = idaapi.get_root_filename()
-        print "[sync] name %s" % self.name
+        print("[sync] name %s" % self.name)
         self.base = idaapi.get_imagebase()
-        print "[sync] module base 0x%x" % self.base
+        print("[sync] module base 0x%x" % self.base)
         self.base_remote = None
         self.gm = GraphManager()
         self.hexsync = Syncrays()
@@ -811,23 +781,25 @@ class RequestHandler(object):
 
 class Broker(QtCore.QProcess):
 
+    QP_STATES = ("Not running", "Starting", "Running")
+    QP_ERRORS = ("Failed to start", "Crashed", "Timedout",
+                 "Read error", "Write Error", "Unknown Error")
+
     def cb_on_error(self, error):
-        errors = ["Failed to start", "Crashed", "Timedout",
-                  "Read error", "Write Error", "Unknown Error"]
-        print "[-] broker error: ", errors[error]
+        print("[-] broker error: %s" % Broker.QP_ERRORS[error])
 
     def cb_broker_on_state_change(self, new_state):
-        states = ["Not running", "Starting", "Running"]
-        print "[*] broker new state: ", states[new_state]
-        if states[new_state] == "Not running":
-            print "    Check dispatcher.py.err if you think this is an error"
+        print("[*] broker new state: %s" % Broker.QP_STATES[new_state])
+        if Broker.QP_STATES[new_state] == "Not running":
+            if rsconfig.LOG_TO_FILE_ENABLE:
+                print("    Check tmpfile retsync.dispatcher.err if you think this is an error")
 
     def cb_broker_on_out(self):
         # readAllStandardOutput() returns QByteArray
         buffer = self.readAllStandardOutput().data().encode("ascii")
         batch = buffer.split('\n')
         for req in batch:
-            self.worker.parse_exec(req)
+            self.worker.parse_exec(req.strip())
 
     def __init__(self, parser):
         QtCore.QProcess.__init__(self)
@@ -848,16 +820,16 @@ class DbgDirHlpr(object):
     def read_rsds_codeview():
         guid = None
         penode = idaapi.netnode()
-        penode.create(peutils_t.PE_NODE)
-        fpos = penode.altval(peutils_t.PE_ALT_DBG_FPOS)
+        penode.create(idautils.peutils_t.PE_NODE)
+        fpos = penode.altval(idautils.peutils_t.PE_ALT_DBG_FPOS)
 
         if (fpos == 0):
-            print "[*] No debug directory"
+            print("[*] No debug directory")
             return guid
 
         input_file = idc.GetInputFilePath()
         if not os.path.exists(input_file):
-            print "[*] input file not available"
+            print("[*] input file not available")
         else:
             with open(input_file, 'r') as fd:
                 fd.seek(fpos)
@@ -878,11 +850,11 @@ class DbgDirHlpr(object):
                 dbgdir = struct.unpack('LLHHLLLL', raw)
                 #  2, IMAGE_DEBUG_TYPE_CODEVIEW
                 if not (dbgdir[4] == 2):
-                    print "[*] not CODEVIEW data"
+                    print("[*] not CODEVIEW data")
                 else:
                     fd.seek(dbgdir[7])
                     if not (fd.read(4) == "RSDS"):
-                        print "[*] unsupported CODEVIEW information format (%s)" % sig
+                        print("[*] unsupported CODEVIEW information format (%s)" % sig)
                     else:
                         d1, d2, d3 = struct.unpack('LHH', fd.read(0x8))
                         d4 = struct.unpack('>H', fd.read(0x2))[0]
@@ -937,14 +909,17 @@ class CheckBoxActionHandler(idaapi.action_handler_t):
 
 # --------------------------------------------------------------------------
 
+
 class SyncForm_t(PluginForm):
 
+    hotkeys_ctx = []
+
     def cb_broker_started(self):
-        print "[*] broker started"
+        print("[*] broker started")
         self.btn.setText("Restart")
 
     def cb_broker_finished(self):
-        print "[*] broker finished"
+        print("[*] broker finished")
         if self.broker:
             self.broker.worker.stop()
             self.cb_sync.stateChanged.disconnect(self.cb_change_state)
@@ -965,18 +940,18 @@ class SyncForm_t(PluginForm):
             broker.waitForFinished(1500)
 
     def init_broker(self):
-        print "[*] init_broker"
+        print("[*] init_broker")
         modname = self.input.text().encode('ascii', 'replace')
         cmdline = u"\"%s\" -u \"%s\" --idb \"%s\"" % (
-                  os.path.join(PYTHON_PATH, PYTHON_BIN),
-                  BROKER_PATH, modname)
-        print "[*] init broker,", cmdline
+                  PYTHON_PATH,
+                  BROKER_PATH,
+                  modname)
+        print("[*] cmdline: %s" % cmdline)
 
         self.broker = Broker(self.parser)
         env = QProcessEnvironment.systemEnvironment()
         env.insert("IDB_PATH", IDB_PATH)
-        env.insert("PYTHON_PATH", os.path.realpath(PYTHON_PATH))
-        env.insert("PYTHON_BIN", PYTHON_BIN)
+        env.insert("PYTHON_PATH", PYTHON_PATH)
 
         try:
             self.broker.started.connect(self.cb_broker_started)
@@ -984,7 +959,7 @@ class SyncForm_t(PluginForm):
             self.broker.setProcessEnvironment(env)
             self.broker.start(cmdline)
         except Exception as e:
-            print "[-] failed to start broker: %s\n%s" % (str(e), traceback.format_exc())
+            print("[-] failed to start broker: %s\n%s" % (str(e), traceback.format_exc()))
             return
 
         self.init_hotkeys()
@@ -1006,7 +981,7 @@ class SyncForm_t(PluginForm):
     def init_single_hotkey(self, key, fnCb):
         ctx = idaapi.add_hotkey(key, fnCb)
         if ctx is None:
-            print("[sync] failed to register hotkey %s", key)
+            print("[sync] failed to register hotkey %s" % key)
             del ctx
         else:
             self.hotkeys_ctx.append(ctx)
@@ -1022,7 +997,7 @@ class SyncForm_t(PluginForm):
         self.hotkeys_ctx = []
 
     def cb_btn_restart(self):
-        print "[sync] restarting broker."
+        print("[sync] restarting broker")
         if self.cb_sync.checkState() == QtCore.Qt.Checked:
             self.cb_sync.toggle()
             time.sleep(0.1)
@@ -1030,30 +1005,29 @@ class SyncForm_t(PluginForm):
 
     def cb_change_state(self, state):
         if state == QtCore.Qt.Checked:
-            print "[*] sync enabled"
+            print("[*] sync enabled")
             # Restart broker
             self.hotkeys_ctx = []
             self.init_broker()
         else:
             if self.broker:
                 self.smooth_kill()
-            print "[*] sync disabled\n"
+            print("[*] sync disabled\n")
 
     def cb_hexrays_sync_state(self, state):
         if self.broker:
             if state == QtCore.Qt.Checked:
-                print "[*] hexrays sync enabled\n"
+                print("[*] hexrays sync enabled\n")
                 self.broker.worker.hexsync.enable()
             else:
-                print "[*] hexrays sync disabled\n"
+                print("[*] hexrays sync disabled\n")
                 self.broker.worker.hexsync.disable()
 
     def cb_hexrays_toggle(self):
-        print "cb_hexrays_toggle"
         self.cb_hexrays.toggle()
 
     def OnCreate(self, form):
-        print "[sync] form create"
+        print("[sync] form create")
 
         # Get parent widget
         parent = self.FormToPyQtWidget(form)
@@ -1072,17 +1046,17 @@ class SyncForm_t(PluginForm):
         label = QtWidgets.QLabel('Overwrite idb name:')
 
         name = idaapi.get_root_filename()
-        print "[sync] default idb name: %s" % name
+        print("[sync] default idb name: %s" % name)
 
         # Check in conf for name overwrite
         confpath = os.path.join(os.path.realpath(IDB_PATH), '.sync')
         if os.path.exists(confpath):
-            print "[sync] found config file: %s" % confpath
-            config = ConfigParser.SafeConfigParser()
+            print("[sync] found config file: %s" % confpath)
+            config = SafeConfigParser()
             config.read(confpath)
             if config.has_option(name, 'name'):
                 name = config.get(name, 'name')
-                print "[sync] overwrite idb name with %s" % name
+                print("[sync] overwrite idb name with %s" % name)
 
         # Create input field
         self.input = QtWidgets.QLineEdit(parent)
@@ -1142,7 +1116,7 @@ class SyncForm_t(PluginForm):
             'g_sync_toogle:action')
 
     def OnClose(self, form):
-        print "[sync] form close"
+        print("[sync] form close")
         self.smooth_kill()
 
         idaapi.unregister_action('hexrays_sync_toogle:action')
@@ -1164,18 +1138,29 @@ class SyncForm_t(PluginForm):
 
 # --------------------------------------------------------------------------
 
-def main():
-    if not idaapi.get_root_filename():
-        print "[sync] please load a file/idb before"
-        return
 
-    global SyncForm
+class RetSyncPlugin(idaapi.plugin_t):
+    flags = idaapi.PLUGIN_PROC
+    comment = "Reverse-Engineering Tools synchronization, ret-sync ."
+    help = "Synchronize a debugging session with IDA."
+    wanted_name = "ret-sync"
+    wanted_hotkey = "Alt-Shift-S"
 
-    try:
-        SyncForm
-    except:
+    def init(self):
+        return idaapi.PLUGIN_KEEP
+
+    def term(self):
+        pass
+
+    def run(self, arg):
+        if not idaapi.get_root_filename():
+            print("[sync] please load a file/idb before")
+            return
+
+        global SyncForm
         SyncForm = SyncForm_t()
+        SyncForm.Show()
 
-    SyncForm.Show()
 
-main()
+def PLUGIN_ENTRY():
+    return RetSyncPlugin()

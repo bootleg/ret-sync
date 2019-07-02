@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2018, Alexandre Gazet.
+# Copyright (C) 2018-2019, Alexandre Gazet.
 #
 # This file is part of ret-sync.
 #
@@ -16,17 +16,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
+import sys
+import traceback
 
 import idaapi
+
 import ida_hexrays
-
-
-COL_YLW = 0x23ffff
-COL_YLW_LIGHT = 0xccffff
-COL_BLANK = 0xffffffff
-COL_BLANK_HEX = COL_BLANK
-COL_CURLINE_HEX = COL_YLW
-COL_PREVLINE_HEX = COL_YLW_LIGHT
+import rsconfig
 
 
 class HexEventCb(object):
@@ -44,7 +40,7 @@ class HexEventCb(object):
                 if self.syncrays.last_func == cfunc.entry_ea:
                     # force a refresh
                     self.syncrays.last_func = None
-        except:
+        except Exception:
             traceback.print_exc()
 
         return 0
@@ -64,14 +60,14 @@ class Syncrays(object):
         self.event_cb = HexEventCb(self).event_cb
 
         if not idaapi.init_hexrays_plugin():
-            print "[sync] hexrays not available"
+            print("[sync] hexrays not available")
         else:
             version = idaapi.get_hexrays_version()
-            print "[sync] hexrays #{} found".format(version)
+            print("[sync] hexrays #{} found".format(version))
             major, minor, revision, build_date = [int(x) for x in version.split('.')]
 
             if (major < 7) or (major >= 7 and minor < 2):
-                print "[sync] hexrays version >= 7.2 is needed"
+                print("[sync] hexrays version >= 7.2 is needed")
                 self.safe_mode = True
 
     def enable(self):
@@ -110,9 +106,9 @@ class Syncrays(object):
             self.last_func = func_ea
 
         self.lines = self.cfunc.get_pseudocode()
-        self.color_ins_vec(self.discarded_ea, COL_BLANK_HEX)
-        self.color_ins_vec(self.prev_ea, COL_PREVLINE_HEX)
-        update = self.color_ins_vec(ea, COL_CURLINE_HEX)
+        self.color_ins_vec(self.discarded_ea, rsconfig.COL_BLANK_HEX)
+        self.color_ins_vec(self.prev_ea, rsconfig.COL_PREVLINE_HEX)
+        update = self.color_ins_vec(ea, rsconfig.COL_CURLINE_HEX)
 
         if update:
             self.discarded_ea = self.prev_ea

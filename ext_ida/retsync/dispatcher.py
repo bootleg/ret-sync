@@ -1,7 +1,7 @@
 #
-# Copyright (C) 2016, Alexandre Gazet.
+# Copyright (C) 2016-2019, Alexandre Gazet.
 #
-# Copyright (C) 2012-2014, Quarkslab.
+# Copyright (C) 2012-2015, Quarkslab.
 #
 # This file is part of ret-sync.
 #
@@ -27,20 +27,29 @@ import os.path as altpath
 import sys
 import socket
 import select
-import base64
-import binascii
 import re
-import ConfigParser
 import traceback
-
-HOST = 'localhost'
-PORT = 9100
+try:
+    from ConfigParser import SafeConfigParser
+except ImportError:
+    from configparser import ConfigParser as SafeConfigParser
 
 try:
     import json
-except:
-    print "[-] failed to import json\n%s" % repr(sys.exc_info())
+except ImportError:
+    print("[-] failed to import json\n%s" % repr(sys.exc_info()))
     sys.exit(0)
+
+import rsconfig
+from rsconfig import rs_encode, rs_decode
+
+
+# Networking
+HOST = rsconfig.HOST
+PORT = rsconfig.PORT
+
+# Logging
+rs_log = rsconfig.init_logging(__file__)
 
 
 class Client():
@@ -63,7 +72,7 @@ class Client():
         batch = []
         self.buffer = ''.join([self.buffer, data])
         if self.buffer.endswith("\n"):
-            batch = [req for req in self.buffer.strip().split('\n') if req != '']
+            batch = [req.strip() for req in self.buffer.split('\n') if req != '']
             self.buffer = ''
 
         return batch
@@ -160,10 +169,11 @@ class DispatcherSrv():
     # buffered readline like function
     def recvall(self, client):
         try:
-            data = client.srv_sock.recv(4096)
+            data = rs_decode(client.srv_sock.recv(4096))
             if data == '':
-                raise
-        except:
+                raise Exception("recv failed")
+
+        except socket.error:
             if client == self.current_dbg:
                 self.broadcast("debugger closed the connection")
                 self.dbg_quit()
@@ -188,13 +198,13 @@ class DispatcherSrv():
         req = self.normalize(req, 8)
         try:
             hash = json.loads(req)
-        except:
-            print "[-] dispatcher failed to parse json\n %s\n" % req
+        except ValueError:
+            print("[-] dispatcher failed to parse json\n %s\n" % req)
             return
 
         type = hash['type']
-        if not type in self.req_handlers:
-            print ("[*] dispatcher unknown request: %s" % type)
+        if type not in self.req_handlers:
+            print("[*] dispatcher unknown request: %s" % type)
             return
 
         req_handler = self.req_handlers[type]
@@ -204,10 +214,7 @@ class DispatcherSrv():
         req = req[taglen:]
         req = req.replace("\\", "\\\\")
         req = req.replace("\n", "")
-        return req
-
-    def puts(self, msg, s):
-        s.sendall(msg)
+        return req.strip()
 
     # dispatcher announcements are forwarded to the idb
     def announcement(self, msg, s=None):
@@ -217,8 +224,9 @@ class DispatcherSrv():
             s = self.current_idb.client_sock
 
         try:
-            s.sendall("[notice]{\"type\":\"dispatcher\",\"subtype\":\"msg\",\"msg\":\"%s\"}\n" % msg)
-        except:
+            announce = "[notice]{\"type\":\"dispatcher\",\"subtype\":\"announce\",\"msg\":\"%s\"}\n" % msg
+            s.sendall(rs_encode(announce))
+        except socket.error:
             return
 
     # send message to all connected idb clients
@@ -234,7 +242,8 @@ class DispatcherSrv():
             s = self.current_idb.client_sock
 
         if s:
-            s.sendall(msg + "\n")
+            fwmsg = "%s\n" % msg
+            s.sendall(rs_encode(fwmsg))
 
     # send dbg message to all idb clients
     def forward_all(self, msg, s=None):
@@ -244,23 +253,26 @@ class DispatcherSrv():
     # disable current idb and enable new idb matched from current module name
     def switch_idb(self, new_idb):
         msg = "[sync]{\"type\":\"broker\",\"subtype\":\"%s\"}\n"
-        if (not self.current_idb == new_idb) & (self.current_idb.enabled):
-            self.current_idb.client_sock.sendall(msg % "disable_idb")
+        if (not self.current_idb == new_idb) and (self.current_idb and self.current_idb.enabled):
+            switchmsg = msg % "disable_idb"
+            self.current_idb.client_sock.sendall(rs_encode(switchmsg))
             self.current_idb.enabled = False
 
         if new_idb:
-            new_idb.client_sock.sendall(msg % "enable_idb")
+            switchmsg = msg % "enable_idb"
+            new_idb.client_sock.sendall(rs_encode(switchmsg))
             self.current_idb = new_idb
-            new_idb.enabled = True
+            self.current_idb.enabled = True
 
     # a new idb client connects to the dispatcher via its broker
     def req_new_client(self, srv_sock, hash):
         port, name = hash['port'], hash['idb']
         try:
             client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client_sock.settimeout(2)
             client_sock.connect(('localhost', port))
             self.opened_socks.append(client_sock)
-        except:
+        except socket.error:
             self.opened_socks.remove(srv_sock)
             srv_sock.close()
             return
@@ -336,10 +348,10 @@ class DispatcherSrv():
     def dbg_dialect(self, client=None):
         msg = "[sync]{\"type\":\"dialect\",\"dialect\":\"%s\"}\n" % self.current_dialect
         if client:
-            client.client_sock.sendall(msg)
+            client.client_sock.sendall(rs_encode(msg))
         else:
             for idbc in self.idb_clients:
-                idbc.client_sock.sendall(msg)
+                idbc.client_sock.sendall(rs_encode(msg))
 
     # debugger client disconnect from the dispatcher
     def req_dbg_quit(self, s, hash):
@@ -370,25 +382,27 @@ class DispatcherSrv():
             for i in range(len(self.idb_clients)):
                 clist += ("    [%d] %s\n" % (i, self.idb_clients[i].name))
 
-        s.sendall(clist)
+        s.sendall(rs_encode(clist))
 
     # manually set current active idb to idb n from idb list
     def req_idb_n(self, s, hash):
         idb = hash['idb']
         try:
             idbn = int(idb)
-        except:
-            s.sendall("> n should be a decimal value")
+        except (TypeError, ValueError):
+            s.sendall("> n should be a decimal rs_encode(value)")
             return
 
         try:
             idbc = self.idb_clients[idbn]
-        except:
-            s.sendall("> %d is invalid (see idblist)" % idbn)
+        except IndexError:
+            msg = "> %d is invalid (see idblist)" % idbn
+            s.sendall(rs_encode(msg))
             return
 
         self.switch_idb(idbc)
-        s.sendall("> current idb set to %d" % idbn)
+        msg = "> current idb set to %d" % idbn
+        s.sendall(rs_encode(msg))
 
     # dbg notice that its current module has changed
     def req_module(self, s, hash):
@@ -410,8 +424,9 @@ class DispatcherSrv():
                 msg = "ambiguous mod request, too many matches for %s"
 
             self.broadcast(msg % modname)
-            # no match current idb (if existing) is disabled
-            if self.current_idb.enabled:
+
+            # no match, current idb (if existing) is disabled
+            if self.current_idb and self.current_idb.enabled:
                 self.switch_idb(None)
 
     # sync mode tells if idb switch is automatic or manual
@@ -426,24 +441,24 @@ class DispatcherSrv():
         self.forward_all(msg)
 
     def req_cmd(self, s, hash):
-        cmd = hash['cmd']
-        self.current_dbg.client_sock.sendall("%s\n" % cmd)
+        cmd = "%s\n" % hash['cmd']
+        self.current_dbg.client_sock.sendall(rs_encode(cmd))
 
 
 def err_log(msg):
-    fd = open("%s.err" % __file__, 'w')
-    fd.write(msg)
-    fd.close()
+    rs_log.debug(msg, exc_info=True)
+    sys.exit()
+
 
 if __name__ == "__main__":
 
     server = DispatcherSrv()
 
-    for loc in ['IDB_PATH', 'USERPROFILE', 'HOME']:
+    for loc in ('IDB_PATH', 'USERPROFILE', 'HOME'):
         if loc in os.environ:
             confpath = os.path.join(os.path.realpath(os.environ[loc]), '.sync')
             if os.path.exists(confpath):
-                config = ConfigParser.SafeConfigParser({'host': HOST, 'port': PORT})
+                config = SafeConfigParser({'host': HOST, 'port': PORT})
                 config.read(confpath)
                 HOST = config.get("INTERFACE", 'host')
                 PORT = config.getint("INTERFACE", 'port')
@@ -454,10 +469,9 @@ if __name__ == "__main__":
         server.bind(HOST, PORT)
     except Exception as e:
         err_log("dispatcher failed to bind on %s:%s\n-> %s" % (HOST, PORT, repr(e)))
-        sys.exit()
 
     try:
         server.loop()
     except Exception as e:
+        server.announcement("dispatcher stopped")
         err_log("dispatcher failed\n-> %s" % repr(e))
-        server.announcement("dispatcher stop")

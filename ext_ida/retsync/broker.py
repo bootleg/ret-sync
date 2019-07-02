@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016, Alexandre Gazet.
+# Copyright (C) 2016-2019, Alexandre Gazet.
 #
 # Copyright (C) 2012-2015, Quarkslab.
 #
@@ -21,9 +21,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Note that broker.py is executed by IDA Pro so it is not possible to see
-# any output using print() or similar
-
 import os
 import sys
 import time
@@ -33,24 +30,33 @@ import argparse
 import subprocess
 import socket
 import select
-import binascii
-import ConfigParser
+
+try:
+    from ConfigParser import SafeConfigParser
+except ImportError:
+    from configparser import ConfigParser as SafeConfigParser
 
 try:
     import json
-except:
-    print "[-] failed to import json\n%s" % repr(sys.exc_info())
+except ImportError:
+    print("[-] failed to import json\n%s" % repr(sys.exc_info()))
     sys.exit(0)
 
+import rsconfig
+from rsconfig import rs_encode, rs_decode
 
-RUN_DISPATCHER_MAX_ATTEMPT = 4
-HOST = "localhost"
-PORT = 9100
+# Networking
+HOST = rsconfig.HOST
+PORT = rsconfig.PORT
+
+# Logging
+rs_log = rsconfig.init_logging(__file__)
+
 
 # default value is current script's path
 DISPATCHER_PATH = os.path.join(os.path.realpath(os.path.dirname(__file__)), "dispatcher.py")
 if not os.path.exists(DISPATCHER_PATH):
-    print "[-] dispatcher path is not properly set, current value: <%s>" % DISPATCHER_PATH
+    print("[-] dispatcher path is not properly set, current value: <%s>" % DISPATCHER_PATH)
     sys.exit(0)
 
 
@@ -64,7 +70,7 @@ class Client():
         batch = []
         self.buffer = ''.join([self.buffer, data])
         if self.buffer.endswith("\n"):
-            batch = [req for req in self.buffer.strip().split('\n') if req != '']
+            batch = [req.strip() for req in self.buffer.split('\n') if req != '']
             self.buffer = ''
 
         return batch
@@ -73,7 +79,7 @@ class Client():
 class BrokerSrv():
 
     def puts(self, msg):
-        print msg
+        print(msg)
         sys.stdout.flush()
 
     def announcement(self, msg):
@@ -88,7 +94,7 @@ class BrokerSrv():
         else:
             notice = "[notice]{\"type\":\"%s\"}\n" % (type)
 
-        self.notify_socket.sendall(notice)
+        self.notify_socket.sendall(rs_encode(notice))
 
     def bind(self):
         self.srv_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -96,32 +102,35 @@ class BrokerSrv():
         self.srv_port = self.srv_sock.getsockname()[1]
 
     def run_dispatcher(self):
-        cmdline = "\"%s\" -u \"%s\"" % (os.path.join(PYTHON_PATH, PYTHON_BIN), DISPATCHER_PATH)
+        cmdline = "\"%s\" -u \"%s\"" % (PYTHON_PATH, DISPATCHER_PATH)
         tokenizer = shlex.shlex(cmdline)
         tokenizer.whitespace_split = True
         args = [arg.replace('\"', '') for arg in list(tokenizer)]
 
         try:
-            proc = subprocess.Popen(args, shell=False, close_fds=True)
+            proc = subprocess.Popen(args, shell=False,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             pid = proc.pid
-        except:
+        except (OSError, ValueError):
             pid = None
+            err_log("failed to run dispatcher")
             self.announcement("failed to run dispatcher")
 
         time.sleep(0.2)
         return pid
 
     def notify(self):
-        for attempt in range(RUN_DISPATCHER_MAX_ATTEMPT):
+        for attempt in range(rsconfig.RUN_DISPATCHER_MAX_ATTEMPT):
             try:
                 self.notify_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.notify_socket.settimeout(2)
                 self.notify_socket.connect((HOST, PORT))
                 break
-            except:
+            except socket.error:
                 self.notify_socket.close()
                 if (attempt != 0):
                     self.announcement("failed to connect to dispatcher (attempt %d)" % (attempt))
-                if (attempt == (RUN_DISPATCHER_MAX_ATTEMPT - 1)):
+                if (attempt == (rsconfig.RUN_DISPATCHER_MAX_ATTEMPT - 1)):
                     self.announcement("failed to connect to dispatcher, too much attempts, exiting...")
                     sys.exit()
 
@@ -131,7 +140,7 @@ class BrokerSrv():
                 self.announcement("dispatcher now runs with pid: %d" % (pid))
 
         time.sleep(0.1)
-        self.notice_dispatcher("new_client", "\"port\":%d,\"idb\":\"%s\"" % (self.srv_port, self.name))
+        self.notice_dispatcher('new_client', "\"port\":%d,\"idb\":\"%s\"" % (self.srv_port, self.name))
         self.announcement('connected to dispatcher')
         self.notice_idb(self.srv_port)
 
@@ -149,10 +158,10 @@ class BrokerSrv():
 
     def recvall(self, client):
         try:
-            data = client.sock.recv(4096)
+            data = rs_decode(client.sock.recv(4096))
             if data == '':
                 raise
-        except:
+        except socket.error:
             self.announcement("dispatcher connection error, quitting")
             sys.exit()
 
@@ -166,10 +175,10 @@ class BrokerSrv():
 
     def req_cmd(self, s, hash):
         cmd = hash['cmd']
-        self.notice_dispatcher("cmd", "\"cmd\":\"%s\"" % cmd)
+        self.notice_dispatcher('cmd', "\"cmd\":\"%s\"" % cmd)
 
     def req_kill(self, s, hash):
-        self.notice_dispatcher("kill")
+        self.notice_dispatcher('kill')
         self.announcement("received kill notice")
         for s in ([self.srv_sock] + self.opened_sockets):
             s.close()
@@ -184,13 +193,13 @@ class BrokerSrv():
 
         try:
             hash = json.loads(req)
-        except:
-            print "[-] broker failed to parse json\n %s" % repr(req)
+        except ValueError:
+            print("[-] broker failed to parse json\n %s" % repr(req))
             return
 
         type = hash['type']
-        if not type in self.req_handlers:
-            print ("[*] broker unknown request: %s" % type)
+        if type not in self.req_handlers:
+            print("[*] broker unknown request: %s" % type)
             return
 
         req_handler = self.req_handlers[type]
@@ -242,32 +251,30 @@ class BrokerSrv():
 
 
 def err_log(msg):
-    fd = open("%s.err" % __file__, 'w')
-    fd.write(msg)
-    fd.close()
+    rs_log.debug(msg, exc_info=True)
+    print(msg)
+    sys.exit()
+
 
 if __name__ == "__main__":
 
     try:
         PYTHON_PATH = os.environ['PYTHON_PATH']
-        PYTHON_BIN = os.environ['PYTHON_BIN']
     except Exception as e:
-        err_log("broker failed to retreive PYTHON_PATH or PYTHON_BIN value.")
-        sys.exit()
+        err_log("broker failed to retrieve PYTHON_PATH value from env")
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--idb', nargs=1, action='store')
     args = parser.parse_args()
 
     if not args.idb:
-        print "[sync] no idb argument"
-        sys.exit()
+        err_log("[sync] no idb argument")
 
-    for loc in ['IDB_PATH', 'USERPROFILE', 'HOME']:
+    for loc in ('IDB_PATH', 'USERPROFILE', 'HOME'):
         if loc in os.environ:
             confpath = os.path.join(os.path.realpath(os.environ[loc]), '.sync')
             if os.path.exists(confpath):
-                config = ConfigParser.SafeConfigParser({'port': PORT, 'host': HOST})
+                config = SafeConfigParser({'port': PORT, 'host': HOST})
                 config.read(confpath)
                 PORT = config.getint("INTERFACE", 'port')
                 HOST = config.get("INTERFACE", 'host')
@@ -277,20 +284,18 @@ if __name__ == "__main__":
 
     try:
         server.bind()
-    except Exception as e:
+    except socket.error as e:
         server.announcement("failed to bind")
         err_log(repr(e))
-        sys.exit()
 
     try:
         server.notify()
     except Exception as e:
         server.announcement("failed to notify dispatcher")
         err_log(repr(e))
-        sys.exit()
 
     try:
         server.loop()
     except Exception as e:
-        server.announcement("broker stop")
         err_log(repr(e))
+        server.announcement("broker stop")
