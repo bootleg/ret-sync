@@ -151,9 +151,12 @@ public class RequestHandler {
 				rsplugin.syncEnabled = false;
 				Path modpath = Paths.get((String) notice.get("path"));
 				String modname = modpath.getFileName().toString();
+				int index = modname.lastIndexOf("\\");
+				String fileName = modname.substring(index + 1);
 
+				rsplugin.cs.println(String.format("[x] looking module %s for program: %s", modname, fileName));
 				if (rsplugin.program != null) {
-					if (rsplugin.program.getName().equalsIgnoreCase(modname)) {
+					if (rsplugin.program.getName().equalsIgnoreCase(fileName)) {
 						rsplugin.cs.println(String.format("[-] already enabled"));
 						rsplugin.syncEnabled = true;
 						break;
@@ -162,7 +165,7 @@ public class RequestHandler {
 
 				// find program in list of open programs
 				for (Program pgm : rsplugin.pm.getAllOpenPrograms()) {
-					if (pgm.getName().equalsIgnoreCase(modname)) {
+					if (pgm.getName().equalsIgnoreCase(fileName)) {
 						rsplugin.pm.setCurrentProgram(pgm);
 						rsplugin.syncEnabled = true;
 						rsplugin.program = pgm;
@@ -173,7 +176,7 @@ public class RequestHandler {
 				}
 
 				if (!rsplugin.syncEnabled) {
-					rsplugin.cs.println(String.format("[x] program unavailable: %s", modname));
+					rsplugin.cs.println(String.format("[x] program unavailable: %s", fileName));
 				}
 
 				break;
