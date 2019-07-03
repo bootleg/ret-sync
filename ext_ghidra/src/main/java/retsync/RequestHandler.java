@@ -151,12 +151,14 @@ public class RequestHandler {
 				rsplugin.syncEnabled = false;
 				Path modpath = Paths.get((String) notice.get("path"));
 				String modname = modpath.getFileName().toString();
-				int index = modname.lastIndexOf("\\");
-				String fileName = modname.substring(index + 1);
 
-				rsplugin.cs.println(String.format("[x] looking module %s for program: %s", modname, fileName));
+				// remove fullpathname not matching in all case for example 
+ 				// when ghidra ran into a mac and debugger is in windows	
+				int index = modname.lastIndexOf("\\");
+				modname = modname.substring(index + 1);
+
 				if (rsplugin.program != null) {
-					if (rsplugin.program.getName().equalsIgnoreCase(fileName)) {
+					if (rsplugin.program.getName().equalsIgnoreCase(modname)) {
 						rsplugin.cs.println(String.format("[-] already enabled"));
 						rsplugin.syncEnabled = true;
 						break;
@@ -165,7 +167,7 @@ public class RequestHandler {
 
 				// find program in list of open programs
 				for (Program pgm : rsplugin.pm.getAllOpenPrograms()) {
-					if (pgm.getName().equalsIgnoreCase(fileName)) {
+					if (pgm.getName().equalsIgnoreCase(modname)) {
 						rsplugin.pm.setCurrentProgram(pgm);
 						rsplugin.syncEnabled = true;
 						rsplugin.program = pgm;
@@ -176,7 +178,7 @@ public class RequestHandler {
 				}
 
 				if (!rsplugin.syncEnabled) {
-					rsplugin.cs.println(String.format("[x] program unavailable: %s", fileName));
+					rsplugin.cs.println(String.format("[x] program unavailable: %s", modname));
 				}
 
 				break;
