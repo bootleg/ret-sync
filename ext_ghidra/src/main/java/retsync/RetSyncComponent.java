@@ -179,7 +179,8 @@ public class RetSyncComponent extends ComponentProvider {
 
 		action_disable.setEnabled(true);
 		action_disable.setDescription("Stop listener");
-		action_disable.setKeyBindingData(new KeyBindingData(KeyEvent.VK_U, InputEvent.ALT_DOWN_MASK));
+		action_disable.setKeyBindingData(
+				new KeyBindingData(KeyEvent.VK_S, InputEvent.SHIFT_DOWN_MASK | InputEvent.ALT_DOWN_MASK));
 		action_disable.setToolBarData(new ToolBarData(Icons.DELETE_ICON, null));
 		dockingTool.addAction(action_disable);
 

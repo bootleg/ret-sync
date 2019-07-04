@@ -469,7 +469,7 @@ configuration files and implements the same protocol, thus all the debugger
 extensions (WinDbg/GDB/LLDB/OllyDbg/OllyDbg2/x64dbg) are compatible.
 
 1. Compile the extension or copy ``ZIP`` from ``ext_ghidra/dist`` to ``$GHIDRA_DIR/Extensions/Ghidra/``
-2. ``File`` -> ``Install Extensions...``
+2. From Ghidra projects manager: ``File`` -> ``Install Extensions...``
 3. Use toolbar icons or shortcuts to enable (``Alt+s``)/disable (``Alt+Shift+s``)/restart (``Alt+r``)
    synchronization.
 
