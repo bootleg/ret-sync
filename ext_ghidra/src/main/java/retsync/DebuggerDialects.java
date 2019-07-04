@@ -22,7 +22,9 @@ package retsync;
 
 import static java.util.Map.entry;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class DebuggerDialects {
@@ -82,4 +84,6 @@ public class DebuggerDialects {
 					entry("ollydbg2", OLLYDBG_DIALECT), 
 					entry("x64_dbg", X64DBG_DIALECT)
 			));
+	
+	public static final List<String> WINDOWS_BASED_DBG = Arrays.asList("windbg", "ollydbg2", "x64_dbg");
 }

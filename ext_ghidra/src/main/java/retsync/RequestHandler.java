@@ -26,6 +26,7 @@ import java.util.Base64;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.apache.commons.io.FilenameUtils;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
@@ -130,8 +131,12 @@ public class RequestHandler {
 				rsplugin.provider.setClient(dialect);
 				rsplugin.provider.setStatus(Status.RUNNING);
 
-				if (DebuggerDialects.DIALECTS.containsKey(dialect))
+				if (DebuggerDialects.DIALECTS.containsKey(dialect)) {
 					curClient.dialect = DebuggerDialects.DIALECTS.get(dialect);
+
+					if (DebuggerDialects.WINDOWS_BASED_DBG.contains(dialect))
+						curClient.isWinOS = true;
+				}
 				else
 					dialect = "unknown";
 
@@ -150,13 +155,14 @@ public class RequestHandler {
 			case "module":
 				rsplugin.syncEnabled = false;
 				Path modpath = Paths.get((String) notice.get("path"));
+	
+				// current OS is Linux/Mac while remote OS is Windows
+				if (curClient.isWinOS && System.getProperty("file.separator").equals("/") ) {
+					modpath = Paths.get(FilenameUtils.separatorsToUnix(modpath.toString()));
+				}
+				
 				String modname = modpath.getFileName().toString();
-
-				// remove fullpathname not matching in all case for example 
- 				// when ghidra ran into a mac and debugger is in windows	
-				int index = modname.lastIndexOf("\\");
-				modname = modname.substring(index + 1);
-
+				
 				if (rsplugin.program != null) {
 					if (rsplugin.program.getName().equalsIgnoreCase(modname)) {
 						rsplugin.cs.println(String.format("[-] already enabled"));

@@ -23,6 +23,7 @@ package retsync;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -173,8 +174,10 @@ public class RetSyncPlugin extends ProgramPlugin {
 		boolean found = false;
 
 		try {
-			fd = new FileInputStream(filePath);
-			found = parseIni(fd);
+			if (Files.exists(Paths.get(filePath))) {
+				fd = new FileInputStream(filePath);
+				found = parseIni(fd);
+			}
 		} catch (IOException e) {
 			cs.println(String.format("[>] failed to read conf file: %s", e.getMessage()));
 		} finally {
@@ -196,9 +199,9 @@ public class RetSyncPlugin extends ProgramPlugin {
 		try {
 			props.load(fd);
 
-			String host = props.getProperty("host");
+			String host = props.getProperty("host", SYNC_HOST);
 			cs.println(String.format("[>] host: %s", host));
-			String port = props.getProperty("port");
+			String port = props.getProperty("port", Integer.toString(SYNC_PORT));
 			cs.println(String.format("[>] port: %s", port));
 
 			SYNC_HOST = host;

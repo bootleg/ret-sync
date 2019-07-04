@@ -33,6 +33,7 @@ public class ClientHandler implements Runnable {
 	PrintWriter out;
 	BufferedReader in;
 	HashMap<String, String> dialect = null;
+	Boolean isWinOS = false;
 
 	public ClientHandler(RetSyncPlugin plugin, Socket socket) {
 		this.clientSocket = socket;
