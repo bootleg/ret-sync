@@ -738,6 +738,6 @@ GREETZ
 ------
 
 Hail to Bruce Dang, StalkR, @Ivanlef0u, Damien Aumaître, Sébastien Renaud and
-Kévin Szkudlapski, @_m00dy_, @saidelike, Xavier Mehrenberger, ben64 for their
-kindness, help, feedbacks and thoughts. Ilfak Guilfanov and Igor Skochinsky
-for their help with IDA's internals and outstanding support.
+Kévin Szkudlapski, @_m00dy_, @saidelike, Xavier Mehrenberger, ben64, Raphaël
+Rigo for their kindness, help, feedbacks and thoughts. Ilfak Guilfanov and
+Igor Skochinsky for their help with IDA's internals and outstanding support.

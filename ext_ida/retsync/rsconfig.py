@@ -23,6 +23,13 @@ import tempfile
 import logging
 from logging.handlers import RotatingFileHandler
 
+try:
+    import distutils.spawn
+    spawn_module = True
+except ImportError:
+    spawn_module = False
+
+
 # global plugin settings
 PLUGIN_DIR = 'retsync'
 
@@ -147,12 +154,20 @@ PY_WIN_DEFAULTS = (
 
 # default paths Linux/Mac OS X platforms
 PY_LINUX_DEFAULTS = (
-    "/usr/bin"
+    "/usr/bin",
     )
 
 
 # retsync plugin needs a Python interpreter to run broker and dispatcher
 def get_python_interpreter():
+
+    # when available, use spawn module to search through PATH
+    if spawn_module:
+        interpreter = distutils.spawn.find_executable('python')
+        if interpreter:
+            return interpreter
+
+    # otherwise, look in various known default paths
     if sys.platform == 'win32':
         PYTHON_BIN = 'python.exe'
         PYTHON_PATHS = PY_WIN_DEFAULTS
@@ -165,7 +180,7 @@ def get_python_interpreter():
         print("\n[sync] plugin initialization failed")
         print("  please fix platform's PYTHON_PATH/PYTHON_BIN values in %s/rsconfig.py" % PLUGIN_DIR)
         print("  unknown platform %s\n" % sys.platform)
-        sys.exit(0)
+        raise RuntimeError
 
     for pypath in PYTHON_PATHS:
         interpreter = os.path.realpath(os.path.normpath(os.path.join(pypath, PYTHON_BIN)))
@@ -175,4 +190,4 @@ def get_python_interpreter():
     print("\n[sync] plugin initialization failed")
     print("  please fix PYTHON_PATH/PYTHON_BIN values in %s/rsconfig.py" % PLUGIN_DIR)
     print("  Python interpreter not found\n")
-    sys.exit(0)
+    raise RuntimeError

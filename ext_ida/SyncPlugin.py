@@ -40,20 +40,20 @@ try:
     import argparse
 except ImportError:
     print("[-] please make sure python's argparse module is available\n%s" % repr(sys.exc_info()))
-    sys.exit(0)
+    raise
 
 try:
     import json
 except ImportError:
     print("[-] failed to import json\n%s" % repr(sys.exc_info()))
-    sys.exit(0)
+    raise
 
 try:
     from PyQt5 import QtCore, QtWidgets
     from PyQt5.QtCore import QProcess, QProcessEnvironment
 except ImportError:
     print("[-] failed to import Qt libs from PyQt5\n%s" % repr(sys.exc_info()))
-    sys.exit(0)
+    raise
 
 import idc
 import idaapi
@@ -75,7 +75,7 @@ PYTHON_PATH = rsconfig.get_python_interpreter()
 BROKER_PATH = os.path.join(os.path.normpath(os.path.dirname(__file__)), rsconfig.PLUGIN_DIR, "broker.py")
 if not os.path.exists(BROKER_PATH):
     print("[-] broker path is not properly set, current value: <%s>" % BROKER_PATH)
-    sys.exit(0)
+    raise RuntimeError
 
 IDB_PATH = os.path.dirname(os.path.realpath(idc.GetIdbPath()))
 
@@ -537,7 +537,7 @@ class RequestHandler(object):
                     time.sleep(0.1)
                     if (attempt == (rsconfig.CONNECT_BROKER_MAX_ATTEMPT - 1)):
                         self.announcement("[sync] failed to connect to broker (attempt %d)" % attempt)
-                        sys.exit()
+                        raise RuntimeError
 
         # enable/disable idb, if disable it drops most sync requests
         elif(subtype == 'enable_idb'):
