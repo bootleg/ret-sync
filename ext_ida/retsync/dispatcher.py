@@ -132,14 +132,14 @@ class DispatcherSrv():
 
     def loop(self):
         self.listen()
-        self.announcement("dispatcher listening")
+        self.announcement('dispatcher listening')
 
         while True:
             rlist, wlist, xlist = select.select(self.srv_socks + self.opened_socks, [], [])
 
             if not rlist:
-                self.announcement("socket error: select")
-                raise Exception("rabbit eating the cable")
+                self.announcement('socket error: select')
+                raise Exception('rabbit eating the cable')
 
             for s in rlist:
                 if s in self.srv_socks:
@@ -171,11 +171,11 @@ class DispatcherSrv():
         try:
             data = rs_decode(client.srv_sock.recv(4096))
             if data == '':
-                raise Exception("recv failed")
+                raise Exception('recv failed')
 
         except socket.error:
             if client == self.current_dbg:
-                self.broadcast("debugger closed the connection")
+                self.broadcast('debugger closed the connection')
                 self.dbg_quit()
             else:
                 self.client_quit(client.srv_sock)
@@ -187,7 +187,7 @@ class DispatcherSrv():
 
     # parse and execute requests from clients (idbs or dbg)
     def parse_exec(self, s, req):
-        if not (req[0:8] == '[notice]'):
+        if not (req.startswith('[notice]')):
             # this is a normal [sync] request from debugger, forward it
             self.forward(req)
             # receive 'dbg disconnected', socket can be closed
@@ -254,12 +254,12 @@ class DispatcherSrv():
     def switch_idb(self, new_idb):
         msg = "[sync]{\"type\":\"broker\",\"subtype\":\"%s\"}\n"
         if (not self.current_idb == new_idb) and (self.current_idb and self.current_idb.enabled):
-            switchmsg = msg % "disable_idb"
+            switchmsg = msg % 'disable_idb'
             self.current_idb.client_sock.sendall(rs_encode(switchmsg))
             self.current_idb.enabled = False
 
         if new_idb:
-            switchmsg = msg % "enable_idb"
+            switchmsg = msg % 'enable_idb'
             new_idb.client_sock.sendall(rs_encode(switchmsg))
             self.current_idb = new_idb
             self.current_idb.enabled = True
@@ -390,7 +390,7 @@ class DispatcherSrv():
         try:
             idbn = int(idb)
         except (TypeError, ValueError):
-            s.sendall("> n should be a decimal rs_encode(value)")
+            s.sendall('> n should be a decimal rs_encode(value)')
             return
 
         try:
@@ -411,7 +411,7 @@ class DispatcherSrv():
         matching = [idbc for idbc in self.idb_clients if (idbc.name.lower() == modname.lower())]
 
         if not self.sync_mode_auto:
-            self.broadcast("sync_mode_auto off")
+            self.broadcast('sync_mode_auto off')
             return
 
         if len(matching) == 1:
@@ -454,24 +454,27 @@ if __name__ == "__main__":
 
     server = DispatcherSrv()
 
-    for loc in ('IDB_PATH', 'USERPROFILE', 'HOME'):
-        if loc in os.environ:
-            confpath = os.path.join(os.path.realpath(os.environ[loc]), '.sync')
-            if os.path.exists(confpath):
-                config = SafeConfigParser({'host': HOST, 'port': PORT})
-                config.read(confpath)
-                HOST = config.get("INTERFACE", 'host')
-                PORT = config.getint("INTERFACE", 'port')
-                server.announcement("configuration file loaded")
-                break
+    try:
+        for loc in ('IDB_PATH', 'USERPROFILE', 'HOME'):
+            if loc in os.environ:
+                confpath = os.path.join(os.path.realpath(os.environ[loc]), '.sync')
+                if os.path.exists(confpath):
+                    config = SafeConfigParser({'host': HOST, 'port': PORT})
+                    config.read(confpath)
+                    HOST = config.get('INTERFACE', 'host')
+                    PORT = config.getint('INTERFACE', 'port')
+                    server.announcement('configuration file loaded')
+                    break
+    except Exception as e:
+        err_log('failed to load configuration file')
 
     try:
         server.bind(HOST, PORT)
     except Exception as e:
-        err_log("dispatcher failed to bind on %s:%s\n-> %s" % (HOST, PORT, repr(e)))
+        err_log("server.bind error %s:%s" % (HOST, PORT))
 
     try:
         server.loop()
     except Exception as e:
-        server.announcement("dispatcher stopped")
-        err_log("dispatcher failed\n-> %s" % repr(e))
+        server.announcement('dispatcher stopped')
+        err_log('server.loop error')

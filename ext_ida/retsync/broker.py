@@ -54,7 +54,7 @@ rs_log = rsconfig.init_logging(__file__)
 
 
 # default value is current script's path
-DISPATCHER_PATH = os.path.join(os.path.realpath(os.path.dirname(__file__)), "dispatcher.py")
+DISPATCHER_PATH = os.path.join(os.path.realpath(os.path.dirname(__file__)), 'dispatcher.py')
 if not os.path.exists(DISPATCHER_PATH):
     print("[-] dispatcher path is not properly set, current value: <%s>" % DISPATCHER_PATH)
     sys.exit(0)
@@ -109,12 +109,13 @@ class BrokerSrv():
 
         try:
             proc = subprocess.Popen(args, shell=False,
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE)
             pid = proc.pid
         except (OSError, ValueError):
             pid = None
-            err_log("failed to run dispatcher")
-            self.announcement("failed to run dispatcher")
+            self.announcement('failed to run dispatcher')
+            err_log('failed to run dispatcher')
 
         time.sleep(0.2)
         return pid
@@ -131,10 +132,10 @@ class BrokerSrv():
                 if (attempt != 0):
                     self.announcement("failed to connect to dispatcher (attempt %d)" % (attempt))
                 if (attempt == (rsconfig.RUN_DISPATCHER_MAX_ATTEMPT - 1)):
-                    self.announcement("failed to connect to dispatcher, too much attempts, exiting...")
+                    self.announcement('failed to connect to dispatcher, too much attempts, exiting...')
                     sys.exit()
 
-            self.announcement("dispatcher not found, trying to run it")
+            self.announcement('dispatcher not found, trying to run it')
             pid = self.run_dispatcher()
             if pid:
                 self.announcement("dispatcher now runs with pid: %d" % (pid))
@@ -160,9 +161,9 @@ class BrokerSrv():
         try:
             data = rs_decode(client.sock.recv(4096))
             if data == '':
-                raise
+                raise Exception('rabbit eating the cable')
         except socket.error:
-            self.announcement("dispatcher connection error, quitting")
+            self.announcement('dispatcher connection error, quitting')
             sys.exit()
 
         return client.feed(data)
@@ -179,7 +180,7 @@ class BrokerSrv():
 
     def req_kill(self, s, hash):
         self.notice_dispatcher('kill')
-        self.announcement("received kill notice")
+        self.announcement('received kill notice')
         for s in ([self.srv_sock] + self.opened_sockets):
             s.close()
         sys.exit()
@@ -216,8 +217,8 @@ class BrokerSrv():
         if len(client) == 1:
             batch = self.recvall(client[0])
         else:
-            self.announcement("socket error")
-            raise Exception("rabbit eating the cable")
+            self.announcement('socket error')
+            raise Exception('rabbit eating the cable')
 
         for req in batch:
             if req != '':
@@ -229,8 +230,8 @@ class BrokerSrv():
             rlist, wlist, xlist = select.select([self.srv_sock] + self.opened_sockets, [], [])
 
             if not rlist:
-                self.announcement("socket error: select")
-                raise Exception("rabbit eating the cable")
+                self.announcement('socket error: select')
+                raise Exception('rabbit eating the cable')
 
             for s in rlist:
                 if s is self.srv_sock:
@@ -250,9 +251,8 @@ class BrokerSrv():
         }
 
 
-def err_log(msg):
+def err_log(msg=''):
     rs_log.debug(msg, exc_info=True)
-    print(msg)
     sys.exit()
 
 
@@ -261,41 +261,44 @@ if __name__ == "__main__":
     try:
         PYTHON_PATH = os.environ['PYTHON_PATH']
     except Exception as e:
-        err_log("broker failed to retrieve PYTHON_PATH value from env")
+        err_log('broker failed to retrieve PYTHON_PATH value from env')
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--idb', nargs=1, action='store')
     args = parser.parse_args()
 
     if not args.idb:
-        err_log("[sync] no idb argument")
+        err_log('[sync] no idb argument')
 
-    for loc in ('IDB_PATH', 'USERPROFILE', 'HOME'):
-        if loc in os.environ:
-            confpath = os.path.join(os.path.realpath(os.environ[loc]), '.sync')
-            if os.path.exists(confpath):
-                config = SafeConfigParser({'port': PORT, 'host': HOST})
-                config.read(confpath)
-                PORT = config.getint("INTERFACE", 'port')
-                HOST = config.get("INTERFACE", 'host')
-                break
+    try:
+        for loc in ('IDB_PATH', 'USERPROFILE', 'HOME'):
+            if loc in os.environ:
+                confpath = os.path.join(os.path.realpath(os.environ[loc]), '.sync')
+                if os.path.exists(confpath):
+                    config = SafeConfigParser({'port': PORT, 'host': HOST})
+                    config.read(confpath)
+                    PORT = config.getint('INTERFACE', 'port')
+                    HOST = config.get('INTERFACE', 'host')
+                    break
+    except Exception as e:
+        err_log('failed to load configuration file')
 
     server = BrokerSrv(args.idb[0])
 
     try:
         server.bind()
     except socket.error as e:
-        server.announcement("failed to bind")
-        err_log(repr(e))
+        server.announcement('failed to bind')
+        err_log('server.bind error')
 
     try:
         server.notify()
     except Exception as e:
-        server.announcement("failed to notify dispatcher")
-        err_log(repr(e))
+        server.announcement('failed to notify dispatcher')
+        err_log('server.notify error')
 
     try:
         server.loop()
     except Exception as e:
-        err_log(repr(e))
-        server.announcement("broker stop")
+        server.announcement('broker stop')
+        err_log('server.loop error')

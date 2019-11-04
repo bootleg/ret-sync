@@ -20,9 +20,9 @@ import sys
 import traceback
 
 import idaapi
-
 import ida_hexrays
-import rsconfig
+
+from . import rsconfig
 
 
 class HexEventCb(object):
@@ -96,7 +96,7 @@ class Syncrays(object):
             return
 
         update = False
-        func_ea = idaapi.get_func(ea).startEA
+        func_ea = idaapi.get_func(ea).start_ea
 
         if self.last_func != func_ea:
             self.vdui_t = ida_hexrays.open_pseudocode(ea, 0)

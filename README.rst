@@ -152,7 +152,7 @@ careful of ``x86``/``x64`` versions), for example:
 For IDA, copy ``Syncplugin.py`` and ``retsync`` folder from ``ext_ida`` to IDA
 plugins directory, for example:
 
-* ``C:\Program Files\IDA Pro 7.3\plugins``
+* ``C:\Program Files\IDA Pro 7.4\plugins``
 * ``%APPDATA%\Hex-Rays\IDA Pro\plugins``
 * ``~/.idapro/plugins``
 
@@ -694,7 +694,7 @@ TODO
 KNOWN BUGS/LIMITATIONS
 -----------------------
 
-- Tested with Python 2.7/3.7, IDA 7.3 (Windows, Linux and Mac OS X), GNU gdb (GDB) 7.4.1 (Debian), lldb 310.2.37.
+- Tested with Python 2.7/3.7, IDA 7.4 (Windows, Linux and Mac OS X), GNU gdb (GDB) 7.4.1 (Debian), lldb 310.2.37.
 - **THERE IS NO AUTHENTICATION/ENCRYPTION** whatsoever between the parties; you're on your own.
 - Self modifying code is out of scope.
 

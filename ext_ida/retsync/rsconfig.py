@@ -160,7 +160,6 @@ PY_LINUX_DEFAULTS = (
 
 # retsync plugin needs a Python interpreter to run broker and dispatcher
 def get_python_interpreter():
-
     # when available, use spawn module to search through PATH
     if spawn_module:
         interpreter = distutils.spawn.find_executable('python')
