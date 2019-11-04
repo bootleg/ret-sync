@@ -1,5 +1,5 @@
 /*
- 
+
 Copyright (C) 2019, Alexandre Gazet.
 
 This file is part of ret-sync.
@@ -16,18 +16,23 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-*/
+ */
 
-package retsync;
+package main.java.retsync;
 
+import java.awt.Color;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 
+import javax.swing.Icon;
 import javax.swing.JComponent;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JTextArea;
+import javax.swing.SwingConstants;
+
 import org.apache.commons.io.FilenameUtils;
 
 import docking.ActionContext;
@@ -40,236 +45,275 @@ import ghidra.app.plugin.core.codebrowser.actions.CodeViewerContextAction;
 import ghidra.app.util.HelpTopics;
 import ghidra.framework.plugintool.Plugin;
 import ghidra.program.model.address.Address;
+import ghidra.program.model.listing.Program;
 import ghidra.program.util.ProgramLocation;
 import ghidra.util.HelpLocation;
 import resources.Icons;
-import retsync.RetSyncPlugin.Status;
+import resources.ResourceManager;
 
 public class RetSyncComponent extends ComponentProvider {
-	private RetSyncPlugin rsplugin;
-	private JPanel panel;
-	private JTextArea statusArea;
-	private JTextArea clientArea;
-	private JTextArea programArea;
-	private DockingAction action_enable;
-	private DockingAction action_disable;
-	private DockingAction action_refresh;
-	private CodeViewerContextAction action_trace;
-	private CodeViewerContextAction action_step;
-	private CodeViewerContextAction action_go;
-	private CodeViewerContextAction action_breakpoint;
-	private CodeViewerContextAction action_translate;
+    private static final Boolean bDebugAction = false;
+    private RetSyncPlugin rsplugin;
+    private JPanel panel;
+    private JLabel statusArea;
+    private JLabel clientArea;
+    private JLabel programArea;
+    private DockingAction action_enable;
+    private DockingAction action_disable;
+    private DockingAction action_refresh;
+    private CodeViewerContextAction action_trace;
+    private CodeViewerContextAction action_step;
+    private CodeViewerContextAction action_go;
+    private CodeViewerContextAction action_bp;
+    private CodeViewerContextAction action_bp1;
+    private CodeViewerContextAction action_hbp;
+    private CodeViewerContextAction action_hbp1;
+    private CodeViewerContextAction action_translate;
+    private static final Color COLOR_CONNECTED = new Color(0, 153, 0);
 
-	public RetSyncComponent(Plugin plugin, String owner) {
-		super(plugin.getTool(), owner, owner);
-		this.rsplugin = (RetSyncPlugin) plugin;
-		buildPanel();
-		createActions();
-	}
+    private class Status {
+        public static final String IDLE = "idle";
+        public static final String ENABLED = "listening";
+        public static final String RUNNING = "connected";
+    }
 
-	private void buildPanel() {
-		GridBagLayout grid = new GridBagLayout();
-		GridBagConstraints gbc = new GridBagConstraints();
-		panel = new JPanel(grid);
+    public RetSyncComponent(Plugin plugin, String owner) {
+        super(plugin.getTool(), owner, owner);
+        rsplugin = (RetSyncPlugin) plugin;
+        createActions();
+        buildPanel();
+        resetStatus();
+        setVisible(true);
+    }
 
-		gbc.gridx = 0;
-		gbc.anchor = GridBagConstraints.SOUTHEAST;
-		gbc.fill = GridBagConstraints.HORIZONTAL;
-		gbc.weightx = 1.0;
-		gbc.gridwidth = 1;
-		gbc.gridheight = 1;
+    private void buildPanel() {
+        GridBagLayout grid = new GridBagLayout();
+        GridBagConstraints gbc = new GridBagConstraints();
+        panel = new JPanel(grid);
 
-		statusArea = new JTextArea();
-		statusArea.setEditable(false);
-		setStatus(Status.IDLE);
-		panel.add(statusArea, gbc);
+        gbc.insets = new Insets(2, 8, 2, 8);
+        gbc.gridx = 0;
+        gbc.anchor = GridBagConstraints.SOUTHEAST;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        gbc.gridwidth = 1;
+        gbc.gridheight = 1;
 
-		clientArea = new JTextArea();
-		clientArea.setEditable(false);
-		setClient("-");
-		panel.add(clientArea, gbc);
+        Icon BROWSER_ICON = ResourceManager.loadImage("images/browser.png");
+        statusArea = new JLabel(BROWSER_ICON, SwingConstants.LEFT);
+        panel.add(statusArea, gbc);
 
-		programArea = new JTextArea();
-		programArea.setEditable(false);
-		setProgram("-");
-		panel.add(programArea, gbc);
+        Icon MEMORY_ICON = ResourceManager.loadImage("images/memory16.gif");
+        clientArea = new JLabel(MEMORY_ICON, SwingConstants.LEFT);
+        panel.add(clientArea, gbc);
 
-		setVisible(true);
-	}
+        Icon CODE_ICON = ResourceManager.loadImage("images/viewedCode.gif");
+        programArea = new JLabel(CODE_ICON, SwingConstants.LEFT);
+        panel.add(programArea, gbc);
+    }
 
-	private CodeViewerContextAction codeViewerActionFactory(String name, String cmd, int key) {
-		CodeViewerContextAction action;
+    private CodeViewerContextAction codeViewerActionFactory(String name, String cmd, int key) {
+        CodeViewerContextAction action;
 
-		action = new CodeViewerContextAction(name, getName(), true) {
-			@Override
-			public void actionPerformed(CodeViewerActionContext context) {
-				rsplugin.cs.println(String.format("[>] %s", this.getFullName()));
+        action = new CodeViewerContextAction(name, getName()) {
+            @Override
+            public void actionPerformed(CodeViewerActionContext context) {
+                if (bDebugAction) {
+                    rsplugin.cs.println(String.format("[>] %s", this.getFullName()));
+                }
 
-				if (!rsplugin.syncEnabled) {
-					rsplugin.cs.println("[sync] program not enabled");
-					return;
-				}
+                if (!rsplugin.syncEnabled) {
+                    rsplugin.cs.println(String.format("[sync] %s, sync not enabled", this.getName()));
+                    return;
+                }
 
-				rsplugin.reqHandler.curClient.sendSimpleCmd(cmd);
-			}
-		};
+                rsplugin.reqHandler.curClient.sendSimpleCmd(cmd);
+            }
+        };
 
-		action.setEnabled(true);
-		action.setKeyBindingData(new KeyBindingData(key, 0));
-		action.setHelpLocation(new HelpLocation(HelpTopics.NAVIGATION, action.getName()));
-		return action;
-	}
+        action.setEnabled(true);
+        action.setKeyBindingData(new KeyBindingData(key, 0));
+        action.setHelpLocation(new HelpLocation(HelpTopics.NAVIGATION, action.getName()));
+        return action;
+    }
 
-	private void createActions() {
-		action_enable = new DockingAction("ret-sync enable", getName()) {
-			@Override
-			public void actionPerformed(ActionContext context) {
-				rsplugin.cs.println(String.format("[>] %s", this.getFullName()));
+    private CodeViewerContextAction breakPointActionFactory(String name, String cmd, KeyBindingData keyBinding) {
+        CodeViewerContextAction breakpoint_action;
+        breakpoint_action = new CodeViewerContextAction(name, getName()) {
+            @Override
+            public void actionPerformed(ActionContext context) {
+                rsplugin.cs.println(String.format("[>] %s", this.getName()));
 
-				if (rsplugin.server == null) {
-					rsplugin.server = new ListenerBackground(rsplugin);
-					new Thread(rsplugin.server).start();
-					rsplugin.cs.println("[>] server started");
-					setStatus(Status.ENABLED);
-				} else {
-					rsplugin.cs.println("[>] server already started");
-				}
-			}
-		};
+                if (rsplugin.syncEnabled) {
+                    ProgramLocation loc = rsplugin.cvs.getCurrentLocation();
+                    Program pgm = loc.getProgram();
 
-		action_disable = new DockingAction("ret-sync disable", getName()) {
-			@Override
-			public void actionPerformed(ActionContext context) {
-				rsplugin.cs.println(String.format("[>] %s", this.getFullName()));
+                    if (pgm.equals(rsplugin.program)) {
+                        Address dest = rsplugin.rebase_remote(loc.getAddress());
+                        rsplugin.reqHandler.curClient.sendCmd(cmd, dest.toString());
+                        rsplugin.cs.println(String.format("    local addr: %s, remote %s", loc.getAddress().toString(),
+                                dest.toString()));
+                    } else {
+                        rsplugin.cs.println(String.format("[x] %s failed, %s program not enabled", cmd, pgm.getName()));
+                    }
+                }
+            }
+        };
 
-				if (rsplugin.server == null) {
-					rsplugin.cs.println("[>] server not started");
-				} else {
-					rsplugin.server.stop();
-					rsplugin.cs.println("[>] server stopped");
-					rsplugin.server = null;
-					resetStatus();
-				}
-			}
-		};
+        breakpoint_action.setEnabled(true);
+        breakpoint_action.setKeyBindingData(keyBinding);
+        breakpoint_action.setHelpLocation(new HelpLocation(HelpTopics.NAVIGATION, breakpoint_action.getName()));
+        return breakpoint_action;
+    }
 
-		action_refresh = new DockingAction("ret-sync restart", getName()) {
-			@Override
-			public void actionPerformed(ActionContext context) {
-				rsplugin.cs.println(String.format("[>] %s", this.getFullName()));
+    private void createActions() {
+        action_enable = new DockingAction("ret-sync enable", getName()) {
+            @Override
+            public void actionPerformed(ActionContext context) {
+                rsplugin.cs.println(String.format("[>] %s", this.getName()));
 
-				if (rsplugin.server == null) {
-					rsplugin.cs.println("[>] server not started");
-				} else {
-					rsplugin.server.stop();
-					resetStatus();
+                if (rsplugin.server == null) {
+                    rsplugin.serverStart();
+                } else {
+                    rsplugin.cs.println("[>] server already started");
+                }
+            }
+        };
 
-					rsplugin.server = new ListenerBackground(rsplugin);
-					new Thread(rsplugin.server).start();
-					rsplugin.cs.println("[>] server started");
-				}
-			}
-		};
+        action_disable = new DockingAction("ret-sync disable", getName()) {
+            @Override
+            public void actionPerformed(ActionContext context) {
+                rsplugin.cs.println(String.format("[>] %s", this.getName()));
+                rsplugin.serverStop();
+            }
+        };
 
-		action_enable.setEnabled(true);
-		action_enable.setDescription("Start listener");
-		action_enable.setKeyBindingData(new KeyBindingData(KeyEvent.VK_S, InputEvent.ALT_DOWN_MASK));
-		action_enable.setToolBarData(new ToolBarData(Icons.ADD_ICON, null));
-		dockingTool.addAction(action_enable);
+        action_refresh = new DockingAction("ret-sync restart", getName()) {
+            @Override
+            public void actionPerformed(ActionContext context) {
+                rsplugin.cs.println(String.format("[>] %s", this.getName()));
+                rsplugin.serverStop();
+                rsplugin.serverStart();
+            }
+        };
 
-		action_disable.setEnabled(true);
-		action_disable.setDescription("Stop listener");
-		action_disable.setKeyBindingData(
-				new KeyBindingData(KeyEvent.VK_S, InputEvent.SHIFT_DOWN_MASK | InputEvent.ALT_DOWN_MASK));
-		action_disable.setToolBarData(new ToolBarData(Icons.DELETE_ICON, null));
-		dockingTool.addAction(action_disable);
+        action_enable.setEnabled(true);
+        action_enable.setDescription("Start listener");
+        action_enable.setKeyBindingData(new KeyBindingData(KeyEvent.VK_S, InputEvent.ALT_DOWN_MASK));
+        action_enable.setToolBarData(new ToolBarData(Icons.ADD_ICON, null));
+        dockingTool.addAction(action_enable);
 
-		action_refresh.setEnabled(true);
-		action_refresh.setDescription("Restart listener");
-		action_refresh.setKeyBindingData(new KeyBindingData(KeyEvent.VK_R, InputEvent.ALT_DOWN_MASK));
-		action_refresh.setToolBarData(new ToolBarData(Icons.REFRESH_ICON, null));
-		dockingTool.addAction(action_refresh);
+        action_disable.setEnabled(true);
+        action_disable.setDescription("Stop listener");
+        action_disable.setKeyBindingData(
+                new KeyBindingData(KeyEvent.VK_S, InputEvent.SHIFT_DOWN_MASK | InputEvent.ALT_DOWN_MASK));
+        action_disable.setToolBarData(new ToolBarData(Icons.DELETE_ICON, null));
+        dockingTool.addAction(action_disable);
 
-		action_breakpoint = new CodeViewerContextAction("ret-sync bp", getName()) {
-			@Override
-			public void actionPerformed(ActionContext context) {
-				rsplugin.cs.println(String.format("[>] %s", this.getFullName()));
+        action_refresh.setEnabled(true);
+        action_refresh.setDescription("Restart listener");
+        action_refresh.setKeyBindingData(new KeyBindingData(KeyEvent.VK_R, InputEvent.ALT_DOWN_MASK));
+        action_refresh.setToolBarData(new ToolBarData(Icons.REFRESH_ICON, null));
+        dockingTool.addAction(action_refresh);
 
-				if (rsplugin.syncEnabled) {
-					ProgramLocation loc = rsplugin.cvs.getCurrentLocation();
-					Address dest = rsplugin.rebase_remote(loc.getAddress());
-					rsplugin.reqHandler.curClient.sendCmd("bp", dest.toString());
-					rsplugin.cs.println(String.format("    local addr: %s, remote %s", loc.getAddress().toString(),
-							dest.toString()));
-				}
-			}
-		};
+        action_translate = new CodeViewerContextAction("ret-sync translate", getName()) {
+            @Override
+            public void actionPerformed(ActionContext context) {
+                rsplugin.cs.println(String.format("[>] %s", this.getName()));
 
-		action_translate = new CodeViewerContextAction("ret-sync translate", getName()) {
-			@Override
-			public void actionPerformed(ActionContext context) {
-				rsplugin.cs.println(String.format("[>] %s", this.getFullName()));
+                if (rsplugin.syncEnabled) {
+                    ProgramLocation loc = rsplugin.cvs.getCurrentLocation();
+                    Program pgm = loc.getProgram();
+                    String args = String.format("%s %s %s", pgm.getImageBase(), loc.getAddress(),
+                            FilenameUtils.removeExtension(pgm.getName()));
 
-				if (rsplugin.syncEnabled) {
-					ProgramLocation loc = rsplugin.cvs.getCurrentLocation();
-					Address dest = rsplugin.rebase_remote(loc.getAddress());
+                    rsplugin.cs.println(String.format("    local addr: %s@%s", pgm.getName(), loc.getAddress()));
+                    rsplugin.reqHandler.curClient.sendRawCmd("translate ", args);
+                } else {
+                    rsplugin.cs.println("[x] translate failed, syncing not enabled");
+                }
+            }
+        };
 
-					String args = String.format("%s %s %s", rsplugin.imageBase.toString(), dest.toString(),
-							FilenameUtils.removeExtension(rsplugin.program.getName()));
-					rsplugin.reqHandler.curClient.sendRawCmd("translate ", args);
-				}
-			}
-		};
+        action_step = codeViewerActionFactory("ret-sync-step", "so", KeyEvent.VK_F10);
+        action_step.setDescription("Single-step program");
+        dockingTool.addAction(action_step);
 
-		action_step = codeViewerActionFactory("ret-sync-step", "so", KeyEvent.VK_F10);
-		action_step.setDescription("Single-step program");
-		dockingTool.addAction(action_step);
+        action_trace = codeViewerActionFactory("ret-sync-trace", "si", KeyEvent.VK_F11);
+        action_trace.setDescription("Single-trace program");
+        dockingTool.addAction(action_trace);
 
-		action_trace = codeViewerActionFactory("ret-sync-trace", "si", KeyEvent.VK_F11);
-		action_trace.setDescription("Single-trace program");
-		dockingTool.addAction(action_trace);
+        action_go = codeViewerActionFactory("ret-sync-go", "go", KeyEvent.VK_F5);
+        action_go.setDescription("Run program");
+        dockingTool.addAction(action_go);
 
-		action_go = codeViewerActionFactory("ret-sync-go", "go", KeyEvent.VK_F5);
-		action_go.setDescription("Run program");
-		dockingTool.addAction(action_go);
+        action_bp = breakPointActionFactory("ret-sync-bp", "bp", new KeyBindingData(KeyEvent.VK_F2, 0));
+        action_bp.setDescription("Set breakpoint");
+        dockingTool.addAction(action_bp);
 
-		action_breakpoint.setEnabled(true);
-		action_breakpoint.markHelpUnnecessary();
-		action_breakpoint.setKeyBindingData(new KeyBindingData(KeyEvent.VK_F2, 0));
-		dockingTool.addAction(action_breakpoint);
+        action_hbp = breakPointActionFactory("ret-sync-hbp", "hbp",
+                new KeyBindingData(KeyEvent.VK_F2, InputEvent.CTRL_DOWN_MASK));
+        action_hbp.setDescription("Set hardware breakpoint");
+        dockingTool.addAction(action_hbp);
 
-		action_translate.setEnabled(true);
-		action_translate.markHelpUnnecessary();
-		action_translate.setKeyBindingData(new KeyBindingData(KeyEvent.VK_F2, InputEvent.ALT_DOWN_MASK));
-		dockingTool.addAction(action_translate);
-	}
+        action_bp1 = breakPointActionFactory("ret-sync-bp1", "bp1",
+                new KeyBindingData(KeyEvent.VK_F3, InputEvent.ALT_DOWN_MASK));
+        action_bp1.setDescription("Set one-shot hardware breakpoint");
+        dockingTool.addAction(action_bp1);
 
-	public void resetStatus() {
-		setStatus(Status.IDLE);
-		setProgram("-");
-		setClient("-");
-	}
+        action_hbp1 = breakPointActionFactory("ret-sync-hbp1", "hbp1",
+                new KeyBindingData(KeyEvent.VK_F3, InputEvent.CTRL_DOWN_MASK));
+        action_hbp1.setDescription("Set one-shot hardware breakpoint");
+        dockingTool.addAction(action_hbp1);
 
-	public void resetClient() {
-		setStatus(Status.ENABLED);
-		setProgram("-");
-		setClient("-");
-	}
+        action_translate.setEnabled(true);
+        action_translate.markHelpUnnecessary();
+        action_translate.setKeyBindingData(new KeyBindingData(KeyEvent.VK_F2, InputEvent.ALT_DOWN_MASK));
+        dockingTool.addAction(action_translate);
+    }
 
-	public void setStatus(String status) {
-		statusArea.setText(String.format("status: %s", status));
-	}
+    public void resetStatus() {
+        setStatus(Status.IDLE);
+        setProgram("n/a");
+        setClient("n/a");
+    }
 
-	public void setClient(String client) {
-		clientArea.setText(String.format("client debugger: %s", client));
-	}
+    public void resetClient() {
+        setStatus(Status.ENABLED);
+        setProgram("n/a");
+        setClient("n/a");
+    }
 
-	public void setProgram(String pgm) {
-		programArea.setText(String.format("client program: %s", pgm));
-	}
+    public void setConnected(String dialect) {
+        setStatus(Status.RUNNING);
+        setClient(dialect);
+    }
 
-	@Override
-	public JComponent getComponent() {
-		return panel;
-	}
+    public void setClient(String client) {
+        clientArea.setText(String.format("Client debugger: %s", client));
+    }
+
+    public void setProgram(String pgm) {
+        programArea.setText(String.format("Client program: %s", pgm));
+    }
+
+    public void setStatus(String status) {
+        statusArea.setText(String.format("Status: %s", status));
+        switch (status) {
+        case Status.IDLE:
+            statusArea.setForeground(Color.BLACK);
+            break;
+        case Status.ENABLED:
+            statusArea.setForeground(Color.BLUE);
+            break;
+        case Status.RUNNING:
+            statusArea.setForeground(COLOR_CONNECTED);
+            break;
+        }
+    }
+
+    @Override
+    public JComponent getComponent() {
+        return panel;
+    }
 }

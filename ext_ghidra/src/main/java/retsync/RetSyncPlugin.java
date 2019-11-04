@@ -1,5 +1,5 @@
 /*
- 
+
 Copyright (C) 2019, Alexandre Gazet.
 
 This file is part of ret-sync.
@@ -16,9 +16,9 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-*/
+ */
 
-package retsync;
+package main.java.retsync;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -31,7 +31,11 @@ import java.util.Properties;
 
 import ghidra.app.CorePluginPackage;
 import ghidra.app.cmd.comments.AppendCommentCmd;
+import ghidra.app.cmd.comments.SetCommentCmd;
+import ghidra.app.cmd.function.SetFunctionRepeatableCommentCmd;
+import ghidra.app.cmd.label.AddLabelCmd;
 import ghidra.app.events.ProgramActivatedPluginEvent;
+import ghidra.app.events.ProgramClosedPluginEvent;
 import ghidra.app.plugin.PluginCategoryNames;
 import ghidra.app.plugin.ProgramPlugin;
 import ghidra.app.services.CodeViewerService;
@@ -44,264 +48,451 @@ import ghidra.framework.plugintool.util.PluginStatus;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressOverflowException;
 import ghidra.program.model.listing.CodeUnit;
+import ghidra.program.model.listing.Function;
+import ghidra.program.model.listing.FunctionManager;
 import ghidra.program.model.listing.Program;
+import ghidra.program.model.symbol.SourceType;
+import ghidra.program.model.symbol.Symbol;
+import ghidra.program.model.symbol.SymbolTable;;
 
 // @formatter:off
 @PluginInfo(
-		status = PluginStatus.STABLE, 
-		packageName = CorePluginPackage.NAME, 
-		category = PluginCategoryNames.NAVIGATION, 
-		shortDescription = "Reverse-Engineering Tools synchronization, ret-sync .", 
-		description = "Synchronize a debugging session with Ghidra.", 
-		servicesRequired = {
-				ProgramManager.class, 
-				ConsoleService.class, 
-				CodeViewerService.class,
-				GoToService.class }, 
-		eventsConsumed = { ProgramActivatedPluginEvent.class })
+        status = PluginStatus.STABLE,
+        packageName = CorePluginPackage.NAME,
+        category = PluginCategoryNames.NAVIGATION,
+        shortDescription = "Reverse-Engineering Tools synchronization, ret-sync .",
+        description = "Synchronize a debugging session with Ghidra.",
+        servicesRequired = {
+                ProgramManager.class,
+                ConsoleService.class,
+                CodeViewerService.class,
+                GoToService.class },
+        eventsConsumed = {
+                ProgramActivatedPluginEvent.class,
+                ProgramClosedPluginEvent.class }
+        )
 // @formatter:on
 
 public class RetSyncPlugin extends ProgramPlugin {
-	public RetSyncComponent provider;
-	// services
-	ConsoleService cs;
-	GoToService gs;
-	CodeViewerService cvs;
-	ProgramManager pm;
-	// client handling
-	ListenerBackground server;
-	RequestHandler reqHandler;
-	// internal state
-	Program program = null;
-	Address imageBase = null;
-	Address imageBaseRemote = null;
-	Boolean syncEnabled;
-	List<Socket> clients = new ArrayList<Socket>();
+    private static final boolean DEBUG_CALLBACK = false;
+    public RetSyncComponent uiComponent;
 
-	// default configuration
-	private static final String CONF_INI_FILE = ".sync";
-	protected String SYNC_HOST = "localhost";
-	protected int SYNC_PORT = 9100;
+    // services
+    ConsoleService cs;
+    GoToService gs;
+    CodeViewerService cvs;
+    ProgramManager pm;
+    LocalColorizerService clrs;
 
-	public RetSyncPlugin(PluginTool tool) {
-		super(tool, true, true);
+    // client handling
+    ListenerBackground server;
+    RequestHandler reqHandler;
 
-		String pluginName = getName();
-		provider = new RetSyncComponent(this, pluginName);
-	}
+    // internal state
+    Program program = null;
+    Address imageBaseLocal = null;
+    Address imageBaseRemote = null;
+    Boolean syncEnabled = false;
 
-	@Override
-	public void init() {
-		super.init();
+    List<Socket> clients = new ArrayList<Socket>();
 
-		cs = tool.getService(ConsoleService.class);
-		if (cs == null) {
-			cs.printlnError("[x] failed acquired ConsoleService");
-		}
+    // default configuration
+    private static final String CONF_INI_FILE = ".sync";
+    protected String SYNC_HOST = "localhost";
+    protected int SYNC_PORT = 9100;
 
-		cs.println("[+] ConsoleService acquired with success");
+    public RetSyncPlugin(PluginTool tool) {
+        super(tool, true, true);
 
-		gs = tool.getService(GoToService.class);
-		if (cs == null) {
-			cs.printlnError("[x] failed acquired GoToService");
-		}
+        String pluginName = getName();
+        uiComponent = new RetSyncComponent(this, pluginName);
+    }
 
-		cs.println("[+] GoToService acquired with success");
+    @Override
+    public void init() {
+        super.init();
 
-		pm = tool.getService(ProgramManager.class);
-		if (pm == null) {
-			cs.printlnError("[x] failed acquired ProgramManager");
-		}
+        cs = tool.getService(ConsoleService.class);
+        cs.println("[*] retsync init");
 
-		cs.println("[+] ProgramManager acquired with success");
+        gs = tool.getService(GoToService.class);
+        pm = tool.getService(ProgramManager.class);
+        cvs = tool.getService(CodeViewerService.class);
+        clrs = new LocalColorizerService(this);
 
-		cvs = tool.getService(CodeViewerService.class);
-		if (pm == null) {
-			cs.printlnError("[x] failed acquired CodeViewerService");
-		}
+        loadConfiguration();
 
-		cs.println("[+] CodeViewerService acquired with success");
+        syncEnabled = false;
+        reqHandler = new RequestHandler(this);
+    }
 
-		loadConfiguration();
+    @Override
+    protected void programActivated(Program activatedProgram) {
+        imageBaseLocal = activatedProgram.getImageBase();
+        if (DEBUG_CALLBACK) {
+            cs.println(String.format("[>] programActivated: %s", activatedProgram.getName()));
+        }
+    }
 
-		syncEnabled = false;
-		reqHandler = new RequestHandler(this);
-	}
+    @Override
+    protected void programDeactivated(Program deactivatedProgram) {
+        if (DEBUG_CALLBACK) {
+            cs.println(String.format("[>] programDeactivated: %s", deactivatedProgram.getName()));
+        }
+    }
 
-	@Override
-	protected void programActivated(Program activatedProgram) {
-		cs.println(String.format("[>] programActivated: %s", activatedProgram.getName()));
-		this.imageBase = activatedProgram.getImageBase();
-		cs.println(String.format("    imageBase: 0x%x", imageBase.getUnsignedOffset()));
-	}
+    @Override
+    protected void programOpened(Program openedProgram) {
+        String pname = openedProgram.getName();
+        cs.println(String.format("[>] programOpened: %s", pname));
+        cs.println(String.format("    imageBase: 0x%x", openedProgram.getImageBase().getUnsignedOffset()));
+    }
 
-	@Override
-	protected void programOpened(Program openedProgram) {
-		String pname = openedProgram.getName();
-		cs.println(String.format("[>] programOpened: %s", pname));
-	}
+    @Override
+    protected void programClosed(Program closedProgram) {
+        cs.println(String.format("[>] programClosed: %s", closedProgram.getName()));
 
-	@Override
-	protected void programClosed(Program closedProgram) {
-		if (this.program != null) {
-			if (this.program.equals(closedProgram)) {
-				String pname = closedProgram.getName();
-				cs.println(String.format("[>] programClosed: %s", pname));
-				this.program = null;
-				this.syncEnabled = false;
-			}
-		}
-	}
+        if (program != null) {
+            if (program.equals(closedProgram)) {
+                // cleanup state
+                clrs.cbColorFinal(program);
+                program = null;
+                syncEnabled = false;
+            }
+        }
 
-	// load configuration file as defined by CONF_INI_FILE
-	// tested locations are : user home, Ghidra project directory
-	void loadConfiguration() {
-		List<String> locations = new ArrayList<String>();
-		locations.add(Paths.get(System.getProperty("user.home")).toString());
-		locations.add(tool.getProject().getProjectLocator().getLocation());
+        // stop the listener if current program is the last one open
+        Program[] pgmList = pm.getAllOpenPrograms();
+        if (pgmList.length == 0) {
+            clrs.disableTrace();
+            if (server != null) {
+                server.stop();
+            }
+        }
+    }
 
-		for (String loc : locations) {
-			if (loadConfigurationFrom(Paths.get(loc, CONF_INI_FILE).toString())) {
-				cs.println(String.format("[>] configuration loaded from %s", loc));
-				break;
-			}
-		}
-	}
+    void setActiveProgram(Program activeProgram) {
+        program = activeProgram;
+        pm.setCurrentProgram(program);
+        cs.println(String.format("[>] set current program: %s", activeProgram.getName()));
+        uiComponent.setProgram(activeProgram.getName());
+        clrs.setProgram(activeProgram);
+        syncEnabled = true;
+    }
 
-	// read .ini formatted file
-	boolean loadConfigurationFrom(String filePath) {
-		FileInputStream fd = null;
-		boolean found = false;
+    void serverStart() {
+        if (server == null) {
+            server = new ListenerBackground(this);
+            try {
+                server.bind();
+                new Thread(server).start();
+                uiComponent.resetClient();
+                cs.println("[>] server started");
+            } catch (IOException e) {
+                cs.println(String.format("[x] server startup failed (%s)", e.getMessage()));
+                server.stop();
+                server = null;
+                uiComponent.resetStatus();
+            }
+        } else {
+            cs.println("[!] server already started");
+        }
+    }
 
-		try {
-			if (Files.exists(Paths.get(filePath))) {
-				fd = new FileInputStream(filePath);
-				found = parseIni(fd);
-			}
-		} catch (IOException e) {
-			cs.println(String.format("[>] failed to read conf file: %s", e.getMessage()));
-		} finally {
-			try {
-				if (fd != null)
-					fd.close();
-			} catch (IOException ex) {
-			}
-		}
-		System.out.println(filePath.toString());
+    void serverStop() {
+        if (server == null) {
+            cs.println("[!] server not started");
+        } else {
+            server.stop();
+            cs.println("[>] server stopped");
+            clrs.cbColorFinal();
+            server = null;
+            program = null;
+            syncEnabled = false;
+            uiComponent.resetStatus();
+        }
+    }
 
-		return found;
-	}
+    // load configuration file as defined by CONF_INI_FILE
+    // tested locations are : user home, Ghidra project directory
+    void loadConfiguration() {
+        List<String> locations = new ArrayList<String>();
+        locations.add(Paths.get(System.getProperty("user.home")).toString());
+        locations.add(tool.getProject().getProjectLocator().getLocation());
 
-	boolean parseIni(FileInputStream fd) {
-		boolean found = false;
+        for (String loc : locations) {
+            if (loadConfigurationFrom(Paths.get(loc, CONF_INI_FILE).toString())) {
+                cs.println(String.format("[>] configuration loaded from %s", loc));
+                break;
+            }
+        }
+    }
 
-		Properties props = new Properties();
-		try {
-			props.load(fd);
+    // read .ini formatted file
+    boolean loadConfigurationFrom(String filePath) {
+        FileInputStream fd = null;
+        boolean found = false;
 
-			String host = props.getProperty("host", SYNC_HOST);
-			cs.println(String.format("[>] host: %s", host));
-			String port = props.getProperty("port", Integer.toString(SYNC_PORT));
-			cs.println(String.format("[>] port: %s", port));
+        try {
+            if (Files.exists(Paths.get(filePath))) {
+                fd = new FileInputStream(filePath);
+                found = parseIni(fd);
+            }
+        } catch (IOException e) {
+            cs.println(String.format("[>] failed to read conf file: %s", e.getMessage()));
+        } finally {
+            try {
+                if (fd != null)
+                    fd.close();
+            } catch (IOException ex) {
+            }
+        }
 
-			SYNC_HOST = host;
-			SYNC_PORT = Integer.parseInt(port);
-			found = true;
-		} catch (IOException e) {
-			cs.println(String.format("[>] failed to parse conf file: %s", e.getMessage()));
-		}
+        return found;
+    }
 
-		return found;
-	}
+    boolean parseIni(FileInputStream fd) {
+        boolean found = false;
 
-	// rebase remote address with respect to
-	// current program image base
-	Address rebase(long base, long offset) {
-		Address dest;
+        Properties props = new Properties();
+        try {
+            props.load(fd);
 
-		if (program == null)
-			return null;
+            String host = props.getProperty("host", SYNC_HOST);
+            cs.println(String.format("[>] host: %s", host));
+            String port = props.getProperty("port", Integer.toString(SYNC_PORT));
+            cs.println(String.format("[>] port: %s", port));
 
-		try {
-			dest = imageBase.addNoWrap(offset - base);
-		} catch (AddressOverflowException e) {
-			cs.println(String.format("[x] unsafe rebase (wrap): 0x%x - 0x%x", base, offset));
-			return null;
-		}
+            SYNC_HOST = host;
+            SYNC_PORT = Integer.parseInt(port);
+            found = true;
+        } catch (IOException e) {
+            cs.println(String.format("[>] failed to parse conf file: %s", e.getMessage()));
+        }
 
-		if (!dest.getAddressSpace().isLoadedMemorySpace()) {
-			cs.println(String.format("[x] unsafe rebase: 0x%x - 0x%x", base, offset));
-			return null;
-		}
+        return found;
+    }
 
-		if (imageBaseRemote == null) {
-			imageBaseRemote = imageBase.getNewAddress(base);
-		}
+    // rebase remote address with respect to
+    // current program image base
+    Address rebase(long base, long offset) {
+        Address dest;
 
-		return dest;
-	}
+        if (program == null)
+            return null;
 
-	// rebase local address with respect to
-	// remote program image base
-	Address rebase_remote(Address loc) {
-		Address dest;
+        try {
+            dest = imageBaseLocal.addNoWrap(offset - base);
+        } catch (AddressOverflowException e) {
+            cs.println(String.format("[x] unsafe rebase (wrap): 0x%x - 0x%x", base, offset));
+            return null;
+        }
 
-		if (this.program == null)
-			return null;
+        if (!dest.getAddressSpace().isLoadedMemorySpace()) {
+            cs.println(String.format("[x] unsafe rebase: 0x%x - 0x%x", base, offset));
+            return null;
+        }
 
-		try {
-			dest = imageBaseRemote.addNoWrap(loc.subtractNoWrap(imageBase.getUnsignedOffset()).getUnsignedOffset());
-		} catch (AddressOverflowException e) {
-			cs.println(String.format("[x] unsafe rebase remote (wrap): 0x%x - 0x%x", imageBaseRemote, loc));
-			return null;
-		}
+        if (imageBaseRemote == null) {
+            imageBaseRemote = imageBaseLocal.getNewAddress(base);
+        }
 
-		if (!dest.getAddressSpace().isLoadedMemorySpace()) {
-			cs.println(String.format("[x] unsafe rebase remote: 0x%x", loc.getOffset()));
-			return null;
-		}
+        return dest;
+    }
 
-		return dest;
-	}
+    // compare remote image base with
+    // offset from arg
+    int cmpRemoteBase(long rbase) {
+        return imageBaseRemote.compareTo(imageBaseRemote.getNewAddress(rbase));
+    }
 
-	void gotoLoc(long base, long offset) {
-		Address dest = null;
+    // rebase local address with respect to
+    // remote program image base
+    Address rebase_remote(Address loc) {
+        Address dest;
 
-		if (!syncEnabled)
-			return;
+        if (program == null)
+            return null;
 
-		dest = rebase(base, offset);
-		if (dest != null) {
-			gs.goTo(dest);
-		}
-	}
+        try {
+            dest = imageBaseRemote.addNoWrap(loc.subtract(imageBaseLocal));
+        } catch (AddressOverflowException e) {
+            cs.println(String.format("[x] unsafe rebase remote (wrap): 0x%x - 0x%x", imageBaseRemote, loc));
+            return null;
+        }
 
-	void addCmt(long base, long offset, String msg) {
-		Address dest = null;
-		boolean res = false;
-		int transactionID;
-		AppendCommentCmd cmd;
+        if (!dest.getAddressSpace().isLoadedMemorySpace()) {
+            cs.println(String.format("[x] unsafe rebase remote: 0x%x", loc.getOffset()));
+            return null;
+        }
 
-		dest = rebase(base, offset);
+        return dest;
+    }
 
-		if (dest != null) {
-			transactionID = program.startTransaction("sync-add-cmt");
-			try {
-				cmd = new AppendCommentCmd(dest, CodeUnit.EOL_COMMENT, msg, ";");
-				res = cmd.applyTo(program);
-			} finally {
-				program.endTransaction(transactionID, true);
-			}
-		}
+    void gotoLoc(long base, long offset) {
+        Address dest = null;
 
-		if (!res) {
-			cs.println("[sync] failed to add comment");
-		}
-	}
+        if (!syncEnabled)
+            return;
 
-	public class Status {
-		public static final String IDLE = "idle";
-		public static final String ENABLED = "listening";
-		public static final String RUNNING = "connected";
-	}
+        dest = rebase(base, offset);
+
+        if (dest != null) {
+            gs.goTo(dest);
+            clrs.setPrevAddr(dest);
+        }
+    }
+
+    void addCmt(long base, long offset, String msg) {
+        Address dest = null;
+        boolean res = false;
+        int transactionID;
+        AppendCommentCmd cmd;
+
+        dest = rebase(base, offset);
+
+        if (dest != null) {
+            transactionID = program.startTransaction("sync-add-cmt");
+            try {
+                cmd = new AppendCommentCmd(dest, CodeUnit.EOL_COMMENT, msg, ";");
+                res = cmd.applyTo(program);
+                cs.println(String.format("[x] cmd.applyTo %s", res));
+            } catch (Exception e) {
+                throw e;
+            } finally {
+                program.endTransaction(transactionID, true);
+            }
+        }
+
+        if (!res) {
+            cs.println("[sync] failed to add comment");
+        }
+    }
+
+    void addFnCmt(long base, long offset, String msg) {
+        Address dest = null;
+        boolean res = false;
+        int transactionID;
+        SetFunctionRepeatableCommentCmd cmd;
+        FunctionManager fm;
+        Function func;
+
+        dest = rebase(base, offset);
+
+        if (dest != null) {
+            fm = program.getFunctionManager();
+            func = fm.getFunctionContaining(dest);
+
+            if (func != null) {
+                transactionID = program.startTransaction("sync-add-fcmt");
+                try {
+                    cmd = new SetFunctionRepeatableCommentCmd(func.getEntryPoint(), msg);
+                    res = cmd.applyTo(program);
+                } finally {
+                    program.endTransaction(transactionID, true);
+                }
+            } else {
+                cs.println(String.format("[x] no function associated with address 0x%x", dest.getOffset()));
+            }
+        }
+
+        if (!res) {
+            cs.println("[sync] failed to add function comment");
+        }
+    }
+
+    void resetCmt(long base, long offset) {
+        Address dest = null;
+        boolean res = false;
+        int transactionID;
+        SetCommentCmd cmd;
+
+        dest = rebase(base, offset);
+
+        if (dest != null) {
+            transactionID = program.startTransaction("sync-reset-cmt");
+            try {
+                cmd = new SetCommentCmd(dest, CodeUnit.EOL_COMMENT, "");
+                res = cmd.applyTo(program);
+            } finally {
+                program.endTransaction(transactionID, true);
+            }
+        }
+
+        if (!res) {
+            cs.println("[sync] failed to reset comment");
+        }
+    }
+
+    void addLabel(long base, long offset, String msg) {
+        Address dest = null;
+        boolean res = false;
+        int transactionID;
+        AddLabelCmd cmd;
+
+        dest = rebase(base, offset);
+
+        if (dest != null) {
+            transactionID = program.startTransaction("sync-add-lbl");
+            try {
+                cmd = new AddLabelCmd(dest, msg, SourceType.USER_DEFINED);
+                res = cmd.applyTo(program);
+            } finally {
+                program.endTransaction(transactionID, true);
+            }
+        }
+
+        if (!res) {
+            cs.println("[sync] failed to add label");
+        }
+    }
+
+    String getSymAt(long base, long offset) {
+        Address dest = null;
+        String symName = null;
+        SymbolTable symTable = program.getSymbolTable();
+
+        dest = rebase(base, offset);
+        if (dest != null) {
+            // look for 'first-hand' symbol (function name, label, etc.)
+            Symbol sym = symTable.getPrimarySymbol(dest);
+            if (sym != null) {
+                symName = sym.getName();
+            }
+
+            // return offset with respect to function's entry point
+            if (symName == null) {
+                FunctionManager fm = program.getFunctionManager();
+                Function fn = fm.getFunctionContaining(dest);
+
+                if (fn != null) {
+                    Address ep = fn.getEntryPoint();
+                    if (dest.compareTo(ep) > 0) {
+                        symName = String.format("%s+0x%x", fn.getName(), dest.subtract(ep));
+                    } else {
+                        symName = String.format("%s-0x%x", fn.getName(), ep.subtract(dest));
+                    }
+                }
+            }
+
+            if (symName != null) {
+                cs.println(String.format("[>] solved sym %s @ 0x%x", symName, dest.getOffset()));
+            } else {
+                cs.println(String.format("[sync] failed to get symbol at 0x%x", dest.getOffset()));
+            }
+        }
+        return symName;
+    }
+
+    List<Symbol> getSymAddr(String symName) {
+        SymbolTable symTable = program.getSymbolTable();
+
+        List<Symbol> syms = symTable.getSymbols(symName, null);
+
+        if (syms.isEmpty()) {
+            cs.println(String.format("[sync] failed to find symbol %s", symName));
+        }
+
+        return syms;
+    }
 }

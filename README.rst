@@ -443,12 +443,12 @@ IDA bindings over WinDbg commands:
 
 ``Syncplugin.py`` also registers WinDbg command wrapper hotkeys.
 
-* ``F2``  - Set breakpoint at cursor address
-* ``F3``  - Set one-shot breakpoint at cursor address
-* ``Ctrl-F2``  - Set hardware breakpoint at cursor address
-* ``Ctrl-F3``  - Set one-shot hardware breakpoint at cursor address
+* ``F2`` - Set breakpoint at cursor address
+* ``F3`` - Set one-shot breakpoint at cursor address
+* ``Ctrl-F2`` - Set hardware breakpoint at cursor address
+* ``Ctrl-F3`` - Set one-shot hardware breakpoint at cursor address
 * ``Alt-F2`` - Translate (rebase in debugger) current cursor address
-* ``Alt-F5``  - Go
+* ``Alt-F5`` - Go
 * ``F10`` - Single step
 * ``F11`` - Single trace
 
@@ -473,11 +473,19 @@ extensions (WinDbg/GDB/LLDB/OllyDbg/OllyDbg2/x64dbg) are compatible.
 3. Use toolbar icons or shortcuts to enable (``Alt+s``)/disable (``Alt+Shift+s``)/restart (``Alt+r``)
    synchronization.
 
-A status window is also available from ``Windows`` -> ``RetSyncPlugin``.
+A status window is also available from ``CodeBrowser`` tool: ``Windows`` -> ``RetSyncPlugin``.
 
-Only a subset of commands (hopefully the most important ones) have been
-implemented so far.
+Bindings over debugger commands are also implemented. They are very similar to
+the ones from IDA's extension.
 
+* ``F2`` - Set breakpoint at cursor address
+* ``Ctrl-F2`` - Set hardware breakpoint at cursor address
+* ``Alt-F3`` - Set one-shot breakpoint at cursor address
+* ``Ctrl-F3`` - Set one-shot hardware breakpoint at cursor address
+* ``Alt-F2`` - Translate (rebase in debugger) current cursor address
+* ``F5`` - Go
+* ``F10`` - Single step
+* ``F11`` - Single trace
 
 
 GNU gdb (GDB)
@@ -694,7 +702,7 @@ TODO
 KNOWN BUGS/LIMITATIONS
 -----------------------
 
-- Tested with Python 2.7/3.7, IDA 7.4 (Windows, Linux and Mac OS X), GNU gdb (GDB) 7.4.1 (Debian), lldb 310.2.37.
+- Tested with Python 2.7/3.7, IDA 7.4 (Windows, Linux and Mac OS X), Ghidra 9.1, GNU gdb (GDB) 7.4.1 (Debian), lldb 310.2.37.
 - **THERE IS NO AUTHENTICATION/ENCRYPTION** whatsoever between the parties; you're on your own.
 - Self modifying code is out of scope.
 
