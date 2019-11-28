@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
  */
 
-package main.java.retsync;
+package retsync;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -29,9 +29,9 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.commons.io.FilenameUtils;
-import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
-import org.json.simple.parser.ParseException;
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.json.JSONTokener;
 
 import ghidra.program.model.address.Address;
 import ghidra.program.model.listing.Program;
@@ -40,7 +40,6 @@ import ghidra.program.model.symbol.Symbol;
 public class RequestHandler {
     private RetSyncPlugin rsplugin;
     private final Lock clientLock = new ReentrantLock(true);
-    private final JSONParser jsonparser = new JSONParser();
     private NoticeHandler noticeHandler;
     private SyncHandler syncHandler;
     ClientHandler curClient;
@@ -68,8 +67,8 @@ public class RequestHandler {
 
     public RequestHandler(RetSyncPlugin plugin) {
         rsplugin = plugin;
-        noticeHandler = new NoticeHandler(plugin);
-        syncHandler = new SyncHandler(plugin);
+        noticeHandler = new NoticeHandler();
+        syncHandler = new SyncHandler();
     }
 
     public void lock() {
@@ -83,9 +82,9 @@ public class RequestHandler {
     public boolean parse(ClientHandler client, String request) {
         boolean bExit = false;
         String payload;
-        String tag = null;
-        curClient = client;
+        String tag;
 
+        curClient = client;
         tag = RequestType.extract(request);
 
         if (tag == null) {
@@ -95,44 +94,40 @@ public class RequestHandler {
 
         payload = RequestType.normalize(request, tag);
         try {
-            Object obj = jsonparser.parse(payload);
+            JSONTokener tokener = new JSONTokener(payload);
+            JSONObject jsonObj = new JSONObject(tokener);
 
             switch (tag) {
             case RequestType.NOTICE:
-                bExit = noticeHandler.parse((JSONObject) obj);
+                bExit = noticeHandler.parse(jsonObj);
                 break;
             case RequestType.SYNC:
                 if (rsplugin.syncEnabled) {
-                    bExit = syncHandler.parse((JSONObject) obj);
+                    bExit = syncHandler.parse(jsonObj);
                 }
                 break;
             }
-
-        } catch (ParseException pe) {
-            rsplugin.cs.println(String.format("[x] fail to parse json: %s", payload));
+        } catch (JSONException exc) {
+            rsplugin.cs.println(String.format("[x] fail to parse json request: %s\n<< %s", exc.toString(), payload));
         }
 
         return bExit;
     }
 
     public class NoticeHandler {
-        private RetSyncPlugin rsplugin;
 
-        public NoticeHandler(RetSyncPlugin plugin) {
-            rsplugin = plugin;
+        public NoticeHandler() {
         }
 
         public boolean parse(JSONObject notice) {
             boolean bExit = false;
-            String type;
-
-            type = (String) notice.get("type");
+            String type = notice.getString("type");
 
             switch (type) {
             // a new debugger client connects
             case "new_dbg":
-                String dialect = (String) notice.get("dialect");
-                rsplugin.cs.println(String.format("[<] new_dbg: %s", (String) notice.get("msg")));
+                String dialect = notice.getString("dialect");
+                rsplugin.cs.println(String.format("[<] new_dbg: %s", notice.getString("msg")));
 
                 if (DebuggerDialects.DIALECTS.containsKey(dialect)) {
                     curClient.dialect = DebuggerDialects.DIALECTS.get(dialect);
@@ -146,9 +141,9 @@ public class RequestHandler {
                 rsplugin.cs.println(String.format("             dialect: %s", dialect));
                 break;
 
-                // debugger client disconnects
+            // debugger client disconnects
             case "dbg_quit":
-                rsplugin.cs.println(String.format("[<] %s", (String) notice.get("msg")));
+                rsplugin.cs.println(String.format("[<] %s", notice.getString("msg")));
                 rsplugin.clrs.cbColorFinal();
                 rsplugin.uiComponent.resetClient();
                 rsplugin.syncEnabled = false;
@@ -156,12 +151,12 @@ public class RequestHandler {
                 curClient = null;
                 break;
 
-                // debugger notice that its current module has changed
+            // debugger notice that its current module has changed
             case "module":
                 rsplugin.syncEnabled = false;
                 rsplugin.clrs.cbColorFinal();
 
-                Path modpath = Paths.get((String) notice.get("path"));
+                Path modpath = Paths.get(notice.getString("path"));
 
                 // current OS is Linux/Mac while remote OS is Windows
                 if (curClient.isWinOS && System.getProperty("file.separator").equals("/")) {
@@ -169,6 +164,17 @@ public class RequestHandler {
                 }
 
                 String modname = modpath.getFileName().toString();
+
+                // handle sync mode
+                if (!rsplugin.syncModAuto) {
+                    rsplugin.cs.println(String.format("[!] sync mod auto off, dropping mod request (%s)", modname));
+                    break;
+                }
+
+                // handle name aliasing, requested module name is overwritten on-the-fly
+                if (rsplugin.aliases.containsKey(modname)) {
+                    modname = rsplugin.aliases.get(modname);
+                }
 
                 // check if mod from request is the same as the current program
                 if (rsplugin.program != null) {
@@ -190,10 +196,28 @@ public class RequestHandler {
                 if (!rsplugin.syncEnabled) {
                     rsplugin.cs.println(String.format("[x] program unavailable: %s", modname));
                 }
+                break;
+
+            // sync mode tells if program switch is automatic or manual
+            case "sync_mode":
+                String auto = notice.getString("auto");
+                rsplugin.cs.println(String.format("[<] sync mod auto: %s", auto));
+
+                switch (auto) {
+                case "on":
+                    rsplugin.syncModAuto = true;
+                    break;
+                case "off":
+                    rsplugin.syncModAuto = false;
+                    break;
+                default:
+                    rsplugin.cs.println(String.format("[x] sync mod unknown: %s", auto));
+                    break;
+                }
 
                 break;
 
-                // send list of currently open programs
+            // send list of currently open programs
             case "idb_list":
                 StringBuffer output = new StringBuffer();
                 int idx = 0;
@@ -209,13 +233,13 @@ public class RequestHandler {
                 curClient.out.println(output.toString());
                 break;
 
-                // manually set current active program to program 'n' from program list
+            // manually set current active program to program 'n' from program list
             case "idb_n":
                 int idbn;
                 Program[] pgmList = rsplugin.pm.getAllOpenPrograms();
 
                 try {
-                    idbn = Integer.decode((String) notice.get("idb"));
+                    idbn = Integer.decode(notice.getString("idb"));
                 } catch (NumberFormatException e) {
                     curClient.out.println("[x] idbn: failed to parse index");
                     break;
@@ -226,15 +250,13 @@ public class RequestHandler {
                     break;
                 }
 
-                rsplugin.pm.setCurrentProgram(pgmList[idbn]);
-
-                curClient.out.println(
-                        String.format("> current program is now: %s", rsplugin.pm.getCurrentProgram().getName()));
+                rsplugin.setActiveProgram(pgmList[idbn]);
+                curClient.out.println(String.format("> current program is now: %s", rsplugin.program.getName()));
                 break;
 
-                // color trace request
+            // color trace request
             case "bc":
-                String bc_action = (String) notice.get("msg");
+                String bc_action = notice.getString("msg");
                 rsplugin.cs.println(String.format("[*] bc: bc_action (%s)", bc_action));
 
                 switch (bc_action) {
@@ -253,7 +275,7 @@ public class RequestHandler {
                     break;
 
                 case "set":
-                    Long rgb = (Long) notice.get("rgb");
+                    Long rgb = notice.getLong("rgb");
                     rsplugin.clrs.setTraceColor(rgb.intValue() & 0xffffff);
                     rsplugin.cs.println(String.format("[*] trace color set to 0x%x", rgb));
                     break;
@@ -274,17 +296,16 @@ public class RequestHandler {
     }
 
     public class SyncHandler {
-        private RetSyncPlugin rsplugin;
 
-        public SyncHandler(RetSyncPlugin plugin) {
-            rsplugin = plugin;
+        public SyncHandler() {
         }
 
         public boolean parse(JSONObject sync) {
             boolean bExit = false;
-            String type = (String) sync.get("type");
-            Long base = (Long) sync.get("base");
-            Long offset = (Long) sync.get("offset");
+            String type = sync.getString("type");
+
+            Long base = sync.optLong("base");
+            Long offset = sync.optLong("offset");
 
             switch (type) {
             // location request, update program's listing/graph view
@@ -304,34 +325,34 @@ public class RequestHandler {
                 rsplugin.clrs.cbColorPost();
                 break;
 
-                // add comment request at addr
+            // add comment request at addr
             case "cmt":
-                String cmt = (String) sync.get("msg");
+                String cmt = sync.getString("msg");
                 rsplugin.addCmt(base, offset, cmt);
                 break;
 
-                // log command output request at addr
+            // log command output request at addr
             case "cmd":
-                String cmdb64 = (String) sync.get("msg");
+                String cmdb64 = sync.getString("msg");
                 String cmd = new String(Base64.getDecoder().decode(cmdb64.getBytes()));
                 rsplugin.addCmt(base, offset, cmd);
                 break;
 
-                // reset comment at addr
+            // reset comment at addr
             case "rcmt":
                 rsplugin.resetCmt(base, offset);
                 break;
 
-                // add a function comment at addr
+            // add a function comment at addr
             case "fcmt":
-                String fcmt = (String) sync.get("msg");
+                String fcmt = sync.getString("msg");
                 rsplugin.addFnCmt(base, offset, fcmt);
                 break;
 
-                // return program's symbol for a given addr
+            // return program's symbol for a given addr
             case "rln":
-                Long ln_rbase = (Long) sync.get("rbase");
-                Long ln_raddr = (Long) sync.get("raddr");
+                Long ln_rbase = sync.getLong("rbase");
+                Long ln_raddr = sync.getLong("raddr");
 
                 String sym = rsplugin.getSymAt(ln_rbase, ln_raddr);
                 if (sym != null) {
@@ -339,9 +360,9 @@ public class RequestHandler {
                 }
                 break;
 
-                // return local address for a given program's symbol
+            // return local address for a given program's symbol
             case "rrln":
-                String symName = (String) sync.get("sym");
+                String symName = sync.getString("sym");
                 List<Symbol> symIter = rsplugin.getSymAddr(symName);
 
                 if (symIter.size() != 1) {
@@ -352,16 +373,16 @@ public class RequestHandler {
                 }
                 break;
 
-                // add label request at address
+            // add label request at address
             case "lbl":
-                String lbl = (String) sync.get("msg");
+                String lbl = sync.getString("msg");
                 rsplugin.addLabel(base, offset, lbl);
                 break;
 
-                // add an address comment request at address
+            // add an address comment request at address
             case "raddr":
-                Long rbase = (Long) sync.get("rbase");
-                Long raddr = (Long) sync.get("raddr");
+                Long rbase = sync.getLong("rbase");
+                Long raddr = sync.getLong("raddr");
 
                 if (rsplugin.cmpRemoteBase(rbase) == 0) {
                     Address target = rsplugin.rebase(rbase, raddr);
@@ -372,23 +393,21 @@ public class RequestHandler {
                 }
                 break;
 
-                // compare loaded module md5 with program's input file md5
+            // compare loaded module md5 with program's input file md5
             case "modcheck":
-                String pdb = (String) sync.get("pdb");
-                String md5 = (String) sync.get("md5");
                 String remote = null;
                 String local = null;
                 String output = null;
 
-                if (pdb != null) {
+                if (sync.has("pdb")) {
                     rsplugin.cs.println("[sync] modcheck (pdb)");
                     local = rsplugin.program.getMetadata().get("PDB GUID").toUpperCase();
-                    remote = parseWindbgInput(pdb);
+                    remote = parseWindbgInput(sync.getString("pdb"));
 
-                } else if (md5 != null) {
+                } else if (sync.has("md5")) {
                     rsplugin.cs.println("[sync] modcheck (md5)");
                     local = rsplugin.program.getExecutableMD5().toUpperCase();
-                    remote = md5.replaceAll("\\s", "").toUpperCase();
+                    remote = sync.getString("md5").replaceAll("\\s", "").toUpperCase();
                 }
 
                 if (local != null && remote != null) {
@@ -406,6 +425,16 @@ public class RequestHandler {
 
                 rsplugin.cs.println(output);
                 rsplugin.reqHandler.curClient.sendRaw(output);
+                break;
+
+            // return current cursor position
+            case "cursor":
+                Address cursor = rsplugin.getCursor();
+                if (cursor == null) {
+                    rsplugin.cs.println("[x] failed to get cursor position");
+                } else {
+                    rsplugin.reqHandler.curClient.sendRaw(cursor.toString());
+                }
                 break;
 
             default:

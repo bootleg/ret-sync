@@ -103,9 +103,17 @@ DBG_DIALECTS = {
         'hbp1': 'xxx '},
 }
 
+
 # debugging settings
 # enable/disable logging JSON received in the IDA output window
 DEBUG_JSON = False
+
+# global log level (console output)
+LOG_LEVEL = logging.INFO
+
+# log prefix to identify plugin
+LOG_PREFIX = 'sync'
+
 # enable/disable broker and dipatcher exception logging to file
 LOG_TO_FILE_ENABLE = False
 
@@ -116,7 +124,7 @@ LOG_FMT_STRING = '%(asctime)-12s [%(levelname)s] %(message)s'
 def init_logging(src):
     logging.basicConfig(level=logging.DEBUG)
     name = os.path.basename(src)
-    rs_log = logging.getLogger('retsync.plugin.' + name)
+    logger = logging.getLogger('retsync.plugin.' + name)
 
     if LOG_TO_FILE_ENABLE:
         rot_handler = logging.handlers.RotatingFileHandler(
@@ -128,9 +136,19 @@ def init_logging(src):
         formatter = logging.Formatter(LOG_FMT_STRING)
         rot_handler.setFormatter(formatter)
         rot_handler.setLevel(logging.DEBUG)
-        rs_log.addHandler(rot_handler)
+        logger.addHandler(rot_handler)
 
-    return rs_log
+    return logger
+
+
+# console output wrapper
+def rs_log(s, lvl=logging.INFO):
+    if lvl >= LOG_LEVEL:
+        print("[%s] %s" % (LOG_PREFIX, s))
+
+
+def rs_debug(s):
+    rs_log(s, logging.DEBUG)
 
 
 # encoding settings (for data going in/out the plugin)

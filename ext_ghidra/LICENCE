@@ -18,6 +18,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 Used open source software:
 
-json-simple 1.1.1
-https://code.google.com/archive/p/json-simple/downloads
-Apache License 2.0 - http://www.apache.org/licenses/LICENSE-2.0.
+JSON in Java [package org.json]
+https://github.com/stleary/JSON-java
+2002 JSON.org
+
+Ini4J 0.5.4
+Ivan Szkiba - http://ini4j.sourceforge.net/
+Apache 2.0

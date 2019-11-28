@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
  */
 
-package main.java.retsync;
+package retsync;
 
 import static java.util.Map.entry;
 

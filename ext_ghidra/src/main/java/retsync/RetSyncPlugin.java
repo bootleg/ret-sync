@@ -18,22 +18,28 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
  */
 
-package main.java.retsync;
+package retsync;
 
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Properties;
+import java.util.Set;
+
+import org.ini4j.Ini;
+import org.ini4j.Profile.Section;
 
 import ghidra.app.CorePluginPackage;
 import ghidra.app.cmd.comments.AppendCommentCmd;
 import ghidra.app.cmd.comments.SetCommentCmd;
 import ghidra.app.cmd.function.SetFunctionRepeatableCommentCmd;
 import ghidra.app.cmd.label.AddLabelCmd;
+import ghidra.app.decompiler.component.DecompilerHighlightService;
 import ghidra.app.events.ProgramActivatedPluginEvent;
 import ghidra.app.events.ProgramClosedPluginEvent;
 import ghidra.app.plugin.PluginCategoryNames;
@@ -42,6 +48,7 @@ import ghidra.app.services.CodeViewerService;
 import ghidra.app.services.ConsoleService;
 import ghidra.app.services.GoToService;
 import ghidra.app.services.ProgramManager;
+import ghidra.framework.cmd.Command;
 import ghidra.framework.plugintool.PluginInfo;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.framework.plugintool.util.PluginStatus;
@@ -53,7 +60,8 @@ import ghidra.program.model.listing.FunctionManager;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.symbol.SourceType;
 import ghidra.program.model.symbol.Symbol;
-import ghidra.program.model.symbol.SymbolTable;;
+import ghidra.program.model.symbol.SymbolTable;
+import ghidra.program.util.ProgramLocation;
 
 // @formatter:off
 @PluginInfo(
@@ -66,7 +74,8 @@ import ghidra.program.model.symbol.SymbolTable;;
                 ProgramManager.class,
                 ConsoleService.class,
                 CodeViewerService.class,
-                GoToService.class },
+                GoToService.class,
+                DecompilerHighlightService.class},
         eventsConsumed = {
                 ProgramActivatedPluginEvent.class,
                 ProgramClosedPluginEvent.class }
@@ -74,7 +83,6 @@ import ghidra.program.model.symbol.SymbolTable;;
 // @formatter:on
 
 public class RetSyncPlugin extends ProgramPlugin {
-    private static final boolean DEBUG_CALLBACK = false;
     public RetSyncComponent uiComponent;
 
     // services
@@ -83,27 +91,33 @@ public class RetSyncPlugin extends ProgramPlugin {
     CodeViewerService cvs;
     ProgramManager pm;
     LocalColorizerService clrs;
+    DecompilerHighlightService dhs;
 
     // client handling
     ListenerBackground server;
     RequestHandler reqHandler;
+    List<Socket> clients = new ArrayList<Socket>();
 
     // internal state
     Program program = null;
     Address imageBaseLocal = null;
     Address imageBaseRemote = null;
     Boolean syncEnabled = false;
-
-    List<Socket> clients = new ArrayList<Socket>();
+    Boolean syncModAuto = true;
 
     // default configuration
+    private static final boolean DEBUG_CALLBACK = false;
     private static final String CONF_INI_FILE = ".sync";
-    protected String SYNC_HOST = "localhost";
-    protected int SYNC_PORT = 9100;
+    protected final String SYNC_HOST_DEFAULT = "localhost";
+    protected final int SYNC_PORT_DEFAULT = 9100;
+
+    // dynamic configuration
+    protected String SYNC_HOST = SYNC_HOST_DEFAULT;
+    protected int SYNC_PORT = SYNC_PORT_DEFAULT;
+    protected HashMap<String, String> aliases = new HashMap<String, String>();
 
     public RetSyncPlugin(PluginTool tool) {
         super(tool, true, true);
-
         String pluginName = getName();
         uiComponent = new RetSyncComponent(this, pluginName);
     }
@@ -118,11 +132,13 @@ public class RetSyncPlugin extends ProgramPlugin {
         gs = tool.getService(GoToService.class);
         pm = tool.getService(ProgramManager.class);
         cvs = tool.getService(CodeViewerService.class);
+        dhs = tool.getService(DecompilerHighlightService.class);
         clrs = new LocalColorizerService(this);
 
         loadConfiguration();
 
         syncEnabled = false;
+        syncModAuto = true;
         reqHandler = new RequestHandler(this);
     }
 
@@ -213,29 +229,36 @@ public class RetSyncPlugin extends ProgramPlugin {
         }
     }
 
+    // restore default configuration values
+    void defaultConfiguration() {
+        SYNC_HOST = SYNC_HOST_DEFAULT;
+        SYNC_PORT = SYNC_PORT_DEFAULT;
+        aliases = new HashMap<String, String>();
+    }
+
     // load configuration file as defined by CONF_INI_FILE
     // tested locations are : user home, Ghidra project directory
     void loadConfiguration() {
         List<String> locations = new ArrayList<String>();
+        locations.add(tool.getProject().getProjectLocator().getProjectDir().toPath().toString());
         locations.add(Paths.get(System.getProperty("user.home")).toString());
-        locations.add(tool.getProject().getProjectLocator().getLocation());
 
         for (String loc : locations) {
-            if (loadConfigurationFrom(Paths.get(loc, CONF_INI_FILE).toString())) {
-                cs.println(String.format("[>] configuration loaded from %s", loc));
+            if (loadConfigurationFrom(Paths.get(loc, CONF_INI_FILE))) {
                 break;
             }
         }
     }
 
-    // read .ini formatted file
-    boolean loadConfigurationFrom(String filePath) {
+    // look for .sync file
+    boolean loadConfigurationFrom(Path filePath) {
         FileInputStream fd = null;
         boolean found = false;
 
         try {
-            if (Files.exists(Paths.get(filePath))) {
-                fd = new FileInputStream(filePath);
+            if (Files.exists(filePath)) {
+                cs.println(String.format("[>] loading configuration file %s", filePath));
+                fd = new FileInputStream(filePath.toString());
                 found = parseIni(fd);
             }
         } catch (IOException e) {
@@ -251,20 +274,39 @@ public class RetSyncPlugin extends ProgramPlugin {
         return found;
     }
 
+    // read .ini formatted file
     boolean parseIni(FileInputStream fd) {
         boolean found = false;
 
-        Properties props = new Properties();
         try {
-            props.load(fd);
+            Ini config = new Ini(fd);
 
-            String host = props.getProperty("host", SYNC_HOST);
-            cs.println(String.format("[>] host: %s", host));
-            String port = props.getProperty("port", Integer.toString(SYNC_PORT));
-            cs.println(String.format("[>] port: %s", port));
+            Section secNetwork = config.get("INTERFACE");
+            if (secNetwork != null) {
+                String host = secNetwork.getOrDefault("host", SYNC_HOST);
+                cs.println(String.format("  - host: %s", host));
 
-            SYNC_HOST = host;
-            SYNC_PORT = Integer.parseInt(port);
+                String port = secNetwork.getOrDefault("port", Integer.toString(SYNC_PORT));
+                cs.println(String.format("  - port: %s", port));
+
+                SYNC_HOST = host;
+                SYNC_PORT = Integer.parseInt(port);
+            }
+
+            Section secAlias = config.get("ALIASES");
+            if (secAlias != null) {
+                if (secAlias != null) {
+                    Set<String> aliasSet = secAlias.keySet();
+                    aliasSet.forEach((String fromName) -> {
+                        String toName = secAlias.get(fromName);
+                        if (!"".equals(toName)) {
+                            aliases.put(toName, fromName);
+                            cs.println(String.format("  - alias %s -> %s", fromName, toName));
+                        }
+                    });
+                }
+            }
+
             found = true;
         } catch (IOException e) {
             cs.println(String.format("[>] failed to parse conf file: %s", e.getMessage()));
@@ -308,7 +350,7 @@ public class RetSyncPlugin extends ProgramPlugin {
 
     // rebase local address with respect to
     // remote program image base
-    Address rebase_remote(Address loc) {
+    Address rebaseRemote(Address loc) {
         Address dest;
 
         if (program == null)
@@ -340,28 +382,20 @@ public class RetSyncPlugin extends ProgramPlugin {
         if (dest != null) {
             gs.goTo(dest);
             clrs.setPrevAddr(dest);
+            clrs.enhancedDecompHighlight(dest);
         }
     }
 
     void addCmt(long base, long offset, String msg) {
         Address dest = null;
         boolean res = false;
-        int transactionID;
         AppendCommentCmd cmd;
 
         dest = rebase(base, offset);
 
         if (dest != null) {
-            transactionID = program.startTransaction("sync-add-cmt");
-            try {
-                cmd = new AppendCommentCmd(dest, CodeUnit.EOL_COMMENT, msg, ";");
-                res = cmd.applyTo(program);
-                cs.println(String.format("[x] cmd.applyTo %s", res));
-            } catch (Exception e) {
-                throw e;
-            } finally {
-                program.endTransaction(transactionID, true);
-            }
+            cmd = new AppendCommentCmd(dest, CodeUnit.EOL_COMMENT, msg, ";");
+            res = doTransaction(cmd, "sync-add-cmt");
         }
 
         if (!res) {
@@ -372,7 +406,6 @@ public class RetSyncPlugin extends ProgramPlugin {
     void addFnCmt(long base, long offset, String msg) {
         Address dest = null;
         boolean res = false;
-        int transactionID;
         SetFunctionRepeatableCommentCmd cmd;
         FunctionManager fm;
         Function func;
@@ -384,13 +417,8 @@ public class RetSyncPlugin extends ProgramPlugin {
             func = fm.getFunctionContaining(dest);
 
             if (func != null) {
-                transactionID = program.startTransaction("sync-add-fcmt");
-                try {
-                    cmd = new SetFunctionRepeatableCommentCmd(func.getEntryPoint(), msg);
-                    res = cmd.applyTo(program);
-                } finally {
-                    program.endTransaction(transactionID, true);
-                }
+                cmd = new SetFunctionRepeatableCommentCmd(func.getEntryPoint(), msg);
+                res = doTransaction(cmd, "sync-add-fcmt");
             } else {
                 cs.println(String.format("[x] no function associated with address 0x%x", dest.getOffset()));
             }
@@ -404,19 +432,13 @@ public class RetSyncPlugin extends ProgramPlugin {
     void resetCmt(long base, long offset) {
         Address dest = null;
         boolean res = false;
-        int transactionID;
         SetCommentCmd cmd;
 
         dest = rebase(base, offset);
 
         if (dest != null) {
-            transactionID = program.startTransaction("sync-reset-cmt");
-            try {
-                cmd = new SetCommentCmd(dest, CodeUnit.EOL_COMMENT, "");
-                res = cmd.applyTo(program);
-            } finally {
-                program.endTransaction(transactionID, true);
-            }
+            cmd = new SetCommentCmd(dest, CodeUnit.EOL_COMMENT, "");
+            res = doTransaction(cmd, "sync-reset-cmt");
         }
 
         if (!res) {
@@ -427,24 +449,31 @@ public class RetSyncPlugin extends ProgramPlugin {
     void addLabel(long base, long offset, String msg) {
         Address dest = null;
         boolean res = false;
-        int transactionID;
         AddLabelCmd cmd;
 
         dest = rebase(base, offset);
 
         if (dest != null) {
-            transactionID = program.startTransaction("sync-add-lbl");
-            try {
-                cmd = new AddLabelCmd(dest, msg, SourceType.USER_DEFINED);
-                res = cmd.applyTo(program);
-            } finally {
-                program.endTransaction(transactionID, true);
-            }
+            cmd = new AddLabelCmd(dest, msg, SourceType.USER_DEFINED);
+            res = doTransaction(cmd, "sync-add-lbl");
         }
 
         if (!res) {
             cs.println("[sync] failed to add label");
         }
+    }
+
+    boolean doTransaction(Command cmd, String tName) {
+        boolean res = false;
+        int transactionID = program.startTransaction(tName);
+
+        try {
+            res = cmd.applyTo(program);
+        } finally {
+            program.endTransaction(transactionID, true);
+        }
+
+        return res;
     }
 
     String getSymAt(long base, long offset) {
@@ -495,4 +524,14 @@ public class RetSyncPlugin extends ProgramPlugin {
 
         return syms;
     }
+
+    Address getCursor() {
+        Address curAddr = null;
+        ProgramLocation cLoc = cvs.getListingPanel().getCursorLocation();
+        if (cLoc != null) {
+            curAddr = cLoc.getAddress();
+        }
+        return curAddr;
+    }
+
 }

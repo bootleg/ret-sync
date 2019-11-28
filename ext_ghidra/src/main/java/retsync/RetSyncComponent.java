@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
  */
 
-package main.java.retsync;
+package retsync;
 
 import java.awt.Color;
 import java.awt.GridBagConstraints;
@@ -54,13 +54,16 @@ import resources.ResourceManager;
 public class RetSyncComponent extends ComponentProvider {
     private static final Boolean bDebugAction = false;
     private RetSyncPlugin rsplugin;
+
     private JPanel panel;
     private JLabel statusArea;
     private JLabel clientArea;
     private JLabel programArea;
+
     private DockingAction action_enable;
     private DockingAction action_disable;
     private DockingAction action_refresh;
+
     private CodeViewerContextAction action_trace;
     private CodeViewerContextAction action_step;
     private CodeViewerContextAction action_go;
@@ -69,6 +72,8 @@ public class RetSyncComponent extends ComponentProvider {
     private CodeViewerContextAction action_hbp;
     private CodeViewerContextAction action_hbp1;
     private CodeViewerContextAction action_translate;
+    private CodeViewerContextAction action_reload_conf;
+
     private static final Color COLOR_CONNECTED = new Color(0, 153, 0);
 
     private class Status {
@@ -84,6 +89,7 @@ public class RetSyncComponent extends ComponentProvider {
         buildPanel();
         resetStatus();
         setVisible(true);
+        setIcon(ResourceManager.loadImage("images/face-monkey.png"));
     }
 
     private void buildPanel() {
@@ -149,7 +155,7 @@ public class RetSyncComponent extends ComponentProvider {
                     Program pgm = loc.getProgram();
 
                     if (pgm.equals(rsplugin.program)) {
-                        Address dest = rsplugin.rebase_remote(loc.getAddress());
+                        Address dest = rsplugin.rebaseRemote(loc.getAddress());
                         rsplugin.reqHandler.curClient.sendCmd(cmd, dest.toString());
                         rsplugin.cs.println(String.format("    local addr: %s, remote %s", loc.getAddress().toString(),
                                 dest.toString()));
@@ -235,6 +241,15 @@ public class RetSyncComponent extends ComponentProvider {
             }
         };
 
+        action_reload_conf = new CodeViewerContextAction("ret-sync reload conf", getName()) {
+            @Override
+            public void actionPerformed(ActionContext context) {
+                rsplugin.cs.println(String.format("[>] %s", this.getName()));
+                rsplugin.defaultConfiguration();
+                rsplugin.loadConfiguration();
+            }
+        };
+
         action_step = codeViewerActionFactory("ret-sync-step", "so", KeyEvent.VK_F10);
         action_step.setDescription("Single-step program");
         dockingTool.addAction(action_step);
@@ -270,6 +285,13 @@ public class RetSyncComponent extends ComponentProvider {
         action_translate.markHelpUnnecessary();
         action_translate.setKeyBindingData(new KeyBindingData(KeyEvent.VK_F2, InputEvent.ALT_DOWN_MASK));
         dockingTool.addAction(action_translate);
+
+        action_reload_conf.setEnabled(true);
+        action_reload_conf.markHelpUnnecessary();
+        action_reload_conf.setKeyBindingData(
+                new KeyBindingData(KeyEvent.VK_R, InputEvent.SHIFT_DOWN_MASK | InputEvent.ALT_DOWN_MASK));
+        dockingTool.addAction(action_reload_conf);
+
     }
 
     public void resetStatus() {

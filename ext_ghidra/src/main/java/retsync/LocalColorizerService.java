@@ -35,18 +35,26 @@ Part of the code from package ColorizingPlugin / ghidra.app.plugin.core.colorize
  * the License.
  */
 
-package main.java.retsync;
+package retsync;
 
 import java.awt.Color;
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.List;
 
+import ghidra.app.decompiler.ClangLine;
+import ghidra.app.decompiler.ClangToken;
+import ghidra.app.decompiler.ClangTokenGroup;
+import ghidra.app.decompiler.component.ClangLayoutController;
+import ghidra.app.decompiler.component.DecompilerUtils;
 import ghidra.app.util.viewer.listingpanel.PropertyBasedBackgroundColorModel;
 import ghidra.program.database.IntRangeMap;
 import ghidra.program.model.address.Address;
+import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.listing.Program;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.exception.DuplicateNameException;
-import ghidra.util.task.TaskMonitorAdapter;
+import ghidra.util.task.TaskMonitor;
 
 public class LocalColorizerService {
     private RetSyncPlugin rsplugin;
@@ -126,7 +134,7 @@ public class LocalColorizerService {
             cbColorPre();
 
             try {
-                program.save("commit-cb-final", TaskMonitorAdapter.DUMMY);
+                program.save("commit-cb-final", TaskMonitor.DUMMY);
             } catch (CancelledException | IOException e) {
                 rsplugin.cs.println(String.format("[x] program.save exception: %s", e.getMessage()));
             }
@@ -150,6 +158,29 @@ public class LocalColorizerService {
                 program.endTransaction(transactionID, true);
             }
         }
+    }
+
+    // enhance highlight in decompiler (full line)
+    public void enhancedDecompHighlight(Address addr) {
+        ClangLayoutController clc = (ClangLayoutController) rsplugin.dhs.getLayoutModel();
+        ClangTokenGroup root = clc.getRoot();
+        AddressSet locs = new AddressSet(addr);
+        List<ClangToken> tokens = DecompilerUtils.getTokens(root, locs);
+
+        // collect ClangLine
+        HashSet<ClangLine> lines = new HashSet<ClangLine>();
+        tokens.forEach((tok) -> {
+            ClangLine lineParent = tok.getLineParent();
+            lines.add(lineParent);
+        });
+
+        // apply highlight for each collected line
+        lines.forEach((line) -> {
+            line.getAllTokens().forEach((token) -> {
+                token.setHighlight(SYNC_CURLINE);
+            });
+        });
+
     }
 
     /*
@@ -193,6 +224,7 @@ public class LocalColorizerService {
         if (program == null) {
             return null;
         }
+
         IntRangeMap map = program.getIntRangeMap(PropertyBasedBackgroundColorModel.COLOR_PROPERTY_NAME);
         if (map == null && create) {
             try {
