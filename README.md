@@ -22,10 +22,11 @@ Disassemblers and static analysis provide us with:
 
 Key features:
 
+* synchronize graph and decompilation views with debugger's state
+* no need to deal with ASLR, addresses are rebased on-the-fly
 * pass data (comment, command output) from debugger to disassembler
 * multiple IDBs/GPRs can be synced at the same time allowing to easily trace
   through multiple modules
-* no need to deal with ASLR, addresses are rebased on-the-fly
 * disassembler and debugger can be on different hosts / VMs
 
 **ret-sync** is a fork of [qb-sync](https://github.com/quarkslab/qb-sync)
@@ -87,7 +88,7 @@ And the disassembler plugins:
 
 IDA and GDB plugins require a valid Python setup. Python 2 and Python 3 are
 supported. ``argparse`` module is also needed, it is included by default in
-Python standard libraries for release 2.7 and newer.
+Python standard libraries for releases 2.7 and newer.
 
 
 # Binary release
@@ -246,7 +247,7 @@ For IDA installation, copy ``Syncplugin.py`` and ``retsync`` folder from
 
 ### IDA plugin troubleshooting
 
-To troubleshot issues with the IDA extension two options are available in the
+To troubleshoot issues with the IDA extension two options are available in the
 file `retsync/rsconfig.py`:
 
 ```
@@ -265,7 +266,7 @@ are generated in the `%TMP%` folder with a name pattern `retsync.%s.err` .
 
 ### Ghidra prerequisites
 
-Only the version of Ghidra specified in the plugin's filename is supported.
+Only the version of Ghidra specified in the plugin's file name is supported.
 E.g. `ghidra_9.1_PUBLIC_20191104_retsync.zip` is for Ghidra 9.1 Public.
 
 ### Ghidra installation
@@ -783,7 +784,7 @@ Use commands, **without "!" prefix**
   will be resolved by disassembler.
 * **cc**: Continue to cursor in disassembler. This is an alternative to using ``F3`` to
   set a one-shot breakpoint and ``F5`` to continue. This is useful if you prefer
-  to do it from gdb
+  to do it from gdb.
 
 ```
     (gdb) b* 0xA91A73

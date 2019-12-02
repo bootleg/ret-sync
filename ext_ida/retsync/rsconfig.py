@@ -167,7 +167,14 @@ def rs_decode(buffer_bytes):
 PY_WIN_DEFAULTS = (
     "C:\\Program Files\\Python37",
     "C:\\Program Files\\Python37-32",
-    "C:\\Python27"
+    "C:\\Python27",
+    "C:\\Python27-x64",
+    )
+
+# default paths Windows platforms
+PY_WIN_LOCAL_DEFAULTS = (
+    "%LOCALAPPDATA%\\Programs\\Python\\Python37",
+    "%LOCALAPPDATA%\\Programs\\Python\\Python38",
     )
 
 # default paths Linux/Mac OS X platforms
@@ -182,29 +189,42 @@ def get_python_interpreter():
     if spawn_module:
         interpreter = distutils.spawn.find_executable('python')
         if interpreter:
-            return interpreter
+            # discard Universal Windows Platform (UWP) directory
+            parts = os.path.split(interpreter)
+            if (len(parts) > 1 and parts[-2].endswith('WindowsApps')):
+                rs_log("Warning, python.exe was detected but is installed as a Windows App (UWP).\n"
+                       "       Dir: \"%s\"\n"
+                       "       This plugin requires a Windows desktop program in order to work properly.\n"
+                       "       Searching for other installations.\n" % interpreter)
+            else:
+                return interpreter
 
     # otherwise, look in various known default paths
     if sys.platform == 'win32':
         PYTHON_BIN = 'python.exe'
         PYTHON_PATHS = PY_WIN_DEFAULTS
 
+        # add paths from %LOCALAPPDATA%
+        localpaths = tuple([os.path.expandvars(pp) for pp in PY_WIN_LOCAL_DEFAULTS])
+        PYTHON_PATHS = PYTHON_PATHS + localpaths
+
     elif sys.platform.startswith('linux') or sys.platform == 'darwin':
         PYTHON_BIN = 'python'
         PYTHON_PATHS = PY_LINUX_DEFAULTS
 
     else:
-        print("\n[sync] plugin initialization failed")
-        print("  please fix platform's PYTHON_PATH/PYTHON_BIN values in %s/rsconfig.py" % PLUGIN_DIR)
-        print("  unknown platform %s\n" % sys.platform)
+        rs_log("plugin initialization failed: unknown platform \"%s\"\n"
+               "       please fix PYTHON_PATH/PYTHON_BIN in %s/rsconfig.py\n"
+               % (sys.platform, PLUGIN_DIR))
+
         raise RuntimeError
 
-    for pypath in PYTHON_PATHS:
-        interpreter = os.path.realpath(os.path.normpath(os.path.join(pypath, PYTHON_BIN)))
+    for pp in PYTHON_PATHS:
+        interpreter = os.path.realpath(os.path.normpath(os.path.join(pp, PYTHON_BIN)))
         if os.path.exists(interpreter):
             return interpreter
 
-    print("\n[sync] plugin initialization failed")
-    print("  please fix PYTHON_PATH/PYTHON_BIN values in %s/rsconfig.py" % PLUGIN_DIR)
-    print("  Python interpreter not found\n")
+    rs_log("plugin initialization failed: Python interpreter not found\n"
+           "       please fix PYTHON_PATH/PYTHON_BIN in %s/rsconfig.py\n" % PLUGIN_DIR)
+
     raise RuntimeError
