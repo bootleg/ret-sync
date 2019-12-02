@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2016, Alexandre Gazet.
+Copyright (C) 2016-2019, Alexandre Gazet.
 
 Copyright (C) 2014-2015, Quarkslab.
 
@@ -20,7 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "core.h"
-
 #include "pluginsdk\TitanEngine\TitanEngine.h"
 #include <windows.h>
 #include <stdio.h>
@@ -33,7 +32,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // Default host value is locahost
 static CHAR *g_DefaultHost = "127.0.0.1";
 static CHAR *g_DefaultPort = "9100";
-BOOL g_ExtConfFile = false;
 
 // Command polling feature
 static HANDLE g_hPollTimer;
@@ -56,7 +54,7 @@ LoadConfigurationFile()
 {
 	DWORD count = 0;
 	HRESULT hRes = S_OK;
-	HANDLE hFile;
+	HANDLE hFile = INVALID_HANDLE_VALUE;
 	CHAR lpProfile[MAX_PATH] = { 0 };
 	LPTSTR lpConfHost = NULL;
 	LPTSTR lpConfPort = NULL;
@@ -73,9 +71,11 @@ LoadConfigurationFile()
 
 	hFile = CreateFile(lpProfile, GENERIC_READ, NULL, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hFile == INVALID_HANDLE_VALUE){
+		_plugin_logprintf("[sync] Configuration file not present, using default values\n");
 		return E_FAIL;
 	}
 
+	_plugin_logprintf("[sync] Loading configuration file: \"%s\"\n", lpProfile);
 	CloseHandle(hFile);
 
 	lpConfHost = (LPTSTR)malloc(MAX_PATH);
@@ -85,18 +85,16 @@ LoadConfigurationFile()
 	}
 
 	count = GetPrivateProfileString("INTERFACE", "host", "127.0.0.1", lpConfHost, MAX_PATH, lpProfile);
-	if ((count == 0) || (count >= (MAX_PATH - 2))){
-		goto failed;
+	if ((count > 0) && (count < (MAX_PATH - 2))){
+		g_DefaultHost = lpConfHost;
+		_plugin_logprintf("[sync]    -> set HOST to %s\n", g_DefaultHost);
 	}
 
 	count = GetPrivateProfileString("INTERFACE", "port", "9100", lpConfPort, MAX_PATH, lpProfile);
-	if ((count == 0) || (count >= (MAX_PATH - 2))){
-		goto failed;
+	if ((count > 0) && (count < (MAX_PATH - 2))) {
+		g_DefaultPort = lpConfPort;
+		_plugin_logprintf("[sync]    -> set PORT to %s\n", g_DefaultPort);
 	}
-
-	g_DefaultHost = lpConfHost;
-	g_DefaultPort = lpConfPort;
-	g_ExtConfFile = true;
 
 	return hRes;
 
@@ -112,28 +110,24 @@ failed:
 HRESULT
 UpdateState()
 {
-	bool bRes = FALSE;
+	BOOL bRes = FALSE;
 	HRESULT hRes = E_FAIL;
 	DWORD dwRes = 0;
 	ULONG64 PrevBase = g_Base;
-	ULONG NameSize = 0;
-	HANDLE hProcess;
+	HANDLE hProcess = INVALID_HANDLE_VALUE;
 
 	g_Offset = GetContextData(UE_CIP);
 
-	bRes = DbgGetModuleAt((duint)g_Offset, g_NameBuffer);
-	if (!bRes)
+	g_Base = DbgFunctions()->ModBaseFromAddr((duint)g_Offset);
+	if (!g_Base)
 	{
-		_plugin_logprintf("[sync] UpdateState: no module at %p...\n", g_Offset);
+		_plugin_logprintf("[sync] UpdateState(%p): could not get module base...\n", g_Offset);
 		return hRes;
 	}
 
-	g_Base = DbgModBaseFromName(g_NameBuffer);
-	if (!g_Base)
-	{
-		_plugin_logputs("[sync] UpdateState: could not get module base...");
-		return hRes;
-	}
+#if VERBOSE >= 2
+	_plugin_logprintf("[sync] UpdateState(%p): module base %p\n", g_Offset, g_Base);
+#endif
 
 	// Check if we are in a new module
 	if ((g_Base != PrevBase) & g_SyncAuto)
@@ -143,12 +137,12 @@ UpdateState()
 		dwRes = GetModuleBaseNameA(hProcess, (HMODULE)g_Base, g_NameBuffer, MAX_MODULE_SIZE);
 		if (dwRes==0)
 		{
-			_plugin_logputs("[sync] could not get module base name...");
+			_plugin_logprintf("[sync] UpdateState(%p): could not get module name...\n", g_Offset);
 			return hRes;
 		}
 
 #if VERBOSE >= 2
-		_plugin_logprintf("[sync] UpdateState: module : \"%s\"\n", g_NameBuffer);
+		_plugin_logprintf("[sync] UpdateState(%p): module : \"%s\"\n", g_Offset, g_NameBuffer);
 #endif
 
 		hRes = TunnelSend("[notice]{\"type\":\"module\",\"path\":\"%s\"}\n", g_NameBuffer);
@@ -168,10 +162,10 @@ UpdateState()
 HRESULT
 PollCmd()
 {
-	bool bRes = FALSE;
+	BOOL bRes = FALSE;
 	HRESULT hRes = S_OK;
-	int NbBytesRecvd;
-	int ch = 0xA;
+	int NbBytesRecvd = 0;
+	const int ch = 0xA;
 	char *msg, *next, *orig = NULL;
 
 	hRes = TunnelPoll(&NbBytesRecvd, &msg);
@@ -207,8 +201,8 @@ PollCmd()
 
 void ReleasePollTimer()
 {
-	BOOL bRes;
-	DWORD dwErr;
+	BOOL bRes = FALSE;
+	DWORD dwErr = 0;
 
 	EnterCriticalSection(&g_CritSectPollRelease);
 
@@ -220,7 +214,7 @@ void ReleasePollTimer()
 	{
 		ResetEvent(g_hPollCompleteEvent);
 		bRes = DeleteTimerQueueTimer(NULL, g_hPollTimer, g_hPollCompleteEvent);
-		if (bRes == 0)
+		if (!bRes)
 		{
 			// msdn: If the error code is ERROR_IO_PENDING, it is not necessary to
 			// call this function again. For any other error, you should retry the call.
@@ -276,6 +270,7 @@ CreatePollTimer()
 }
 
 
+// sync command implementation
 HRESULT sync(PSTR Args)
 {
 	HRESULT hRes = S_OK;
@@ -297,12 +292,12 @@ HRESULT sync(PSTR Args)
 		goto Exit;
 	}
 
-	_plugin_logputs("[sync] probing sync\n");
+	_plugin_logputs("[sync] probing connection\n");
 
 	hRes = TunnelSend("[notice]{\"type\":\"new_dbg\",\"msg\":\"dbg connect - x64_dbg\",\"dialect\":\"x64_dbg\"}\n");
 	if (FAILED(hRes))
 	{
-		_plugin_logputs("[sync] sync aborted\n");
+		_plugin_logputs("[sync] probe failed, is IDA/Ghidra plugin listening?\n");
 		goto Exit;
 	}
 
@@ -316,6 +311,7 @@ Exit:
 }
 
 
+// syncoff command implementation
 HRESULT syncoff()
 {
 	HRESULT hRes = S_OK;
@@ -424,7 +420,9 @@ static bool cbSyncoffCommand(int argc, char* argv[])
 void coreInit(PLUG_INITSTRUCT* initStruct)
 {
 	// register commands
+#if VERBOSE >= 2
 	_plugin_logprintf("[sync] pluginHandle: %d\n", pluginHandle);
+#endif
 
 	if (!_plugin_registercommand(pluginHandle, "!sync", cbSyncCommand, false))
 		_plugin_logputs("[sync] error registering the \"!sync\" command!");
@@ -445,14 +443,20 @@ void coreInit(PLUG_INITSTRUCT* initStruct)
 	InitializeCriticalSection(&g_CritSectPollRelease);
 
 	if (SUCCEEDED(LoadConfigurationFile())){
-		_plugin_logprintf("[sync] Configuration file loaded\n       -> set HOST to %s:%s\n", g_DefaultHost, g_DefaultPort);
+		_plugin_logprintf("[sync] Configuration file loaded\n");
 	}
-
 }
 
 
 void coreStop()
 {
+	// close tunnel and release objects
+	ReleasePollTimer();
+	TunnelClose();
+	DeleteCriticalSection(&g_CritSectPollRelease);
+	CloseHandle(g_hPollCompleteEvent);
+
+	// unregister plugin's commands and menu entries
 	_plugin_unregistercommand(pluginHandle, "!sync");
 	_plugin_unregistercommand(pluginHandle, "!syncoff");
 	_plugin_menuclear(hMenu);

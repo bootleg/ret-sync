@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2016, Alexandre Gazet.
+Copyright (C) 2016-2019, Alexandre Gazet.
 
 Copyright (C) 2014-2015, Quarkslab.
 
