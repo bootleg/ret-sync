@@ -528,9 +528,13 @@ public class RetSyncPlugin extends ProgramPlugin {
     Address getCursor() {
         Address curAddr = null;
         ProgramLocation cLoc = cvs.getListingPanel().getCursorLocation();
-        if (cLoc != null) {
-            curAddr = cLoc.getAddress();
+
+        if (cLoc == null) {
+            cs.println("[sync] failed to get cursor location");
+        } else {
+            curAddr = rebaseRemote(cLoc.getAddress());
         }
+        
         return curAddr;
     }
 
