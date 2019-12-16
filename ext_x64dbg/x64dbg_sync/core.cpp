@@ -27,7 +27,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <strsafe.h>
 #include "tunnel.h"
 
-#define VERBOSE 0
 
 // Default host value is locahost
 static CHAR *g_DefaultHost = "127.0.0.1";
@@ -39,8 +38,8 @@ static HANDLE g_hPollCompleteEvent;
 static CRITICAL_SECTION g_CritSectPollRelease;
 
 // Debuggee's state;
-ULONG64 g_Offset = NULL;
-ULONG64 g_Base = NULL;
+ULONG_PTR g_Offset = NULL;
+ULONG_PTR g_Base = NULL;
 
 // Synchronisation mode
 static BOOL g_SyncAuto = true;
@@ -60,17 +59,17 @@ LoadConfigurationFile()
 	LPTSTR lpConfPort = NULL;
 
 	count = GetEnvironmentVariable("userprofile", lpProfile, MAX_PATH);
-	if (count == 0 || count > MAX_PATH){
+	if (count == 0 || count > MAX_PATH) {
 		return E_FAIL;
 	}
 
 	hRes = StringCbCat(lpProfile, MAX_PATH, CONF_FILE);
-	if FAILED(hRes){
+	if FAILED(hRes) {
 		return E_FAIL;
 	}
 
 	hFile = CreateFile(lpProfile, GENERIC_READ, NULL, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	if (hFile == INVALID_HANDLE_VALUE){
+	if (hFile == INVALID_HANDLE_VALUE) {
 		_plugin_logprintf("[sync] Configuration file not present, using default values\n");
 		return E_FAIL;
 	}
@@ -80,12 +79,12 @@ LoadConfigurationFile()
 
 	lpConfHost = (LPTSTR)malloc(MAX_PATH);
 	lpConfPort = (LPTSTR)malloc(MAX_PATH);
-	if (lpConfHost == NULL || lpConfPort == NULL){
+	if (lpConfHost == NULL || lpConfPort == NULL) {
 		goto failed;
 	}
 
 	count = GetPrivateProfileString("INTERFACE", "host", "127.0.0.1", lpConfHost, MAX_PATH, lpProfile);
-	if ((count > 0) && (count < (MAX_PATH - 2))){
+	if ((count > 0) && (count < (MAX_PATH - 2))) {
 		g_DefaultHost = lpConfHost;
 		_plugin_logprintf("[sync]    -> set HOST to %s\n", g_DefaultHost);
 	}
@@ -99,8 +98,8 @@ LoadConfigurationFile()
 	return hRes;
 
 failed:
-	if (lpConfHost != NULL){ free(lpConfHost); }
-	if (lpConfPort != NULL){ free(lpConfPort); }
+	if (lpConfHost != NULL) { free(lpConfHost); }
+	if (lpConfPort != NULL) { free(lpConfPort); }
 
 	return E_FAIL;
 }
@@ -113,7 +112,7 @@ UpdateState()
 	BOOL bRes = FALSE;
 	HRESULT hRes = E_FAIL;
 	DWORD dwRes = 0;
-	ULONG64 PrevBase = g_Base;
+	ULONG_PTR PrevBase = g_Base;
 	HANDLE hProcess = INVALID_HANDLE_VALUE;
 
 	g_Offset = GetContextData(UE_CIP);
@@ -135,7 +134,7 @@ UpdateState()
 		hProcess = ((PROCESS_INFORMATION*)TitanGetProcessInformation())->hProcess;
 
 		dwRes = GetModuleBaseNameA(hProcess, (HMODULE)g_Base, g_NameBuffer, MAX_MODULE_SIZE);
-		if (dwRes==0)
+		if (dwRes == 0)
 		{
 			_plugin_logprintf("[sync] UpdateState(%p): could not get module name...\n", g_Offset);
 			return hRes;
@@ -146,13 +145,17 @@ UpdateState()
 #endif
 
 		hRes = TunnelSend("[notice]{\"type\":\"module\",\"path\":\"%s\"}\n", g_NameBuffer);
-		if (FAILED(hRes)){
+		if (FAILED(hRes)) {
 
 			return hRes;
 		}
 	}
 
+#if defined(_WIN64)
 	hRes = TunnelSend("[sync]{\"type\":\"loc\",\"base\":%llu,\"offset\":%llu}\n", g_Base, g_Offset);
+#elif
+	hRes = TunnelSend("[sync]{\"type\":\"loc\",\"base\":%u,\"offset\":%u}\n", g_Base, g_Offset);
+#endif
 
 	return hRes;
 }
@@ -180,8 +183,12 @@ PollCmd()
 			if (next != NULL)
 				*next = 0;
 
+#if VERBOSE >= 2
+			_plugin_logprintf("[sync] received command : %s\n", msg);
+#endif
+
 			bRes = DbgCmdExec(msg);
-			if (!bRes){
+			if (!bRes) {
 				dbgout("[sync] received command: %s (not yet implemented)\n", msg);
 			}
 
@@ -219,9 +226,10 @@ void ReleasePollTimer()
 			// msdn: If the error code is ERROR_IO_PENDING, it is not necessary to
 			// call this function again. For any other error, you should retry the call.
 			dwErr = GetLastError();
-			if (dwErr != ERROR_IO_PENDING){
+
+			if (dwErr != ERROR_IO_PENDING) {
 				bRes = DeleteTimerQueueTimer(NULL, g_hPollTimer, g_hPollCompleteEvent);
-				if (!bRes){
+				if (!bRes) {
 #if VERBOSE >= 2
 					_plugin_logputs("[sync] ReleasePollTimer called\n");
 #endif
@@ -241,17 +249,33 @@ void ReleasePollTimer()
 VOID
 CALLBACK PollTimerCb(PVOID lpParameter, BOOL TimerOrWaitFired)
 {
-	HRESULT hRes;
+	HRESULT hRes = S_FALSE;
 	UNREFERENCED_PARAMETER(lpParameter);
 	UNREFERENCED_PARAMETER(TimerOrWaitFired);
+
+	// If tunnel is down, prevent callback from running
+	if (FAILED(TunnelIsUp())) {
+#if VERBOSE >= 2
+		_plugin_logputs("[sync] PollTimerCb: tunnel is down\n");
+#endif
+		goto INHIBIT_TIMER_CB;
+	}
 
 	hRes = PollCmd();
 
 	// If an error occured in PollCmd() the timer callback is deleted.
 	// (typically happens when client has closed the connection)
-	if (FAILED(hRes)){
-		ReleasePollTimer();
+	if (FAILED(hRes)) {
+#if VERBOSE >= 2
+		_plugin_logputs("[sync] PollTimerCb: PollCmd failed\n");
+#endif
+		goto INHIBIT_TIMER_CB;
 	}
+
+	return;
+
+INHIBIT_TIMER_CB:
+	ReleasePollTimer();
 }
 
 
@@ -264,7 +288,7 @@ CreatePollTimer()
 	bRes = CreateTimerQueueTimer(&g_hPollTimer, NULL, (WAITORTIMERCALLBACK)PollTimerCb,
 		NULL, TIMER_PERIOD, TIMER_PERIOD, WT_EXECUTEINTIMERTHREAD);
 
-	if (!(bRes)){
+	if (!(bRes)) {
 		_plugin_logputs("[sync] failed to CreatePollTimer\n");
 	}
 }
@@ -316,7 +340,7 @@ HRESULT syncoff()
 {
 	HRESULT hRes = S_OK;
 
-	if (!g_Synchronized){
+	if (!g_Synchronized) {
 		return hRes;
 	}
 
@@ -442,7 +466,7 @@ void coreInit(PLUG_INITSTRUCT* initStruct)
 
 	InitializeCriticalSection(&g_CritSectPollRelease);
 
-	if (SUCCEEDED(LoadConfigurationFile())){
+	if (SUCCEEDED(LoadConfigurationFile())) {
 		_plugin_logprintf("[sync] Configuration file loaded\n");
 	}
 }

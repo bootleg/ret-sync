@@ -28,7 +28,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define plugin_name "SyncPlugin"
 #define plugin_version 1
-#define VERBOSE 0
 
 
 int pluginHandle;

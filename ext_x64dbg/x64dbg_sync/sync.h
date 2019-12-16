@@ -30,7 +30,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define DLL_EXPORT __declspec(dllexport)
 #endif //DLL_EXPORT
 
-//superglobal variables
+// verbosity level for the plugin
+#define VERBOSE 0
+
+// superglobal variables
 extern int pluginHandle;
 extern HWND hwndDlg;
 extern int hMenu;
