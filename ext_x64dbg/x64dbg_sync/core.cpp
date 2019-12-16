@@ -153,7 +153,7 @@ UpdateState()
 
 #if defined(_WIN64)
 	hRes = TunnelSend("[sync]{\"type\":\"loc\",\"base\":%llu,\"offset\":%llu}\n", g_Base, g_Offset);
-#elif
+#else
 	hRes = TunnelSend("[sync]{\"type\":\"loc\",\"base\":%u,\"offset\":%u}\n", g_Base, g_Offset);
 #endif
 
