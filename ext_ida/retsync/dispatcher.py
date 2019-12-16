@@ -241,7 +241,7 @@ class DispatcherSrv():
                 return
             s = self.current_idb.client_sock
 
-        if s:
+        if s and self.current_idb.enabled:
             fwmsg = "%s\n" % msg
             s.sendall(rs_encode(fwmsg))
 
