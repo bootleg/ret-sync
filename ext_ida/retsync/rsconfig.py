@@ -99,8 +99,9 @@ DBG_DIALECTS = {
         'go': 'go',
         'bp': 'bp ',
         'hbp': 'bph ',
-        'bp1': 'xxx ',
-        'hbp1': 'xxx '},
+        'bp1': 'bp ',
+        'hbp1': 'bph ',
+        'oneshot_post': ',ss'},
 }
 
 

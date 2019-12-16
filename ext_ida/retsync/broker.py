@@ -200,7 +200,7 @@ class BrokerSrv():
 
         type = hash['type']
         if type not in self.req_handlers:
-            print("[*] broker unknown request: %s" % type)
+            self.announcement("[x] broker unknown request: %s\njson: %s" % (type, repr(req)))
             return
 
         req_handler = self.req_handlers[type]

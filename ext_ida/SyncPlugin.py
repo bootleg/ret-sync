@@ -23,6 +23,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import re
 import sys
 import time
 import traceback
@@ -578,7 +579,7 @@ class RequestHandler(object):
             hash = json.loads(req_)
         except ValueError:
             if rsconfig.DEBUG_JSON:
-                rs_log("[-] Sync failed to parse json\n '%s'. Caching for next req..." % req_)
+                rs_log("[x] Sync failed to parse json\n '%s'. Caching for next req..." % req_)
                 rs_log("------------------------------------")
             self.prev_req = req
             return
@@ -597,7 +598,7 @@ class RequestHandler(object):
             if self.is_active:
                 req_handler(hash)
             else:
-                rs_log('[-] Drop the request because idb is not enabled')
+                rs_debug("[-] Drop the %s request because idb is not enabled" % type)
                 return
 
         idaapi.refresh_idaview_anyway()
@@ -621,6 +622,9 @@ class RequestHandler(object):
         ea = idaapi.get_screen_ea()
         offset = self.rebase_remote(ea)
         cmd = "%s0x%x" % (self.dbg_dialect['bp1' if oneshot else 'bp'], offset)
+
+        if (oneshot and 'oneshot_post' in self.dbg_dialect):
+            cmd += self.dbg_dialect['oneshot_post']
 
         self.notice_broker("cmd", "\"cmd\":\"%s\"" % cmd)
         rs_log(">> set %s" % cmd)
@@ -909,9 +913,44 @@ class CheckBoxActionHandler(idaapi.action_handler_t):
 # --------------------------------------------------------------------------
 
 
+class CmdHook(ida_kernwin.UI_Hooks):
+
+    def __init__(self):
+        idaapi.UI_Hooks.__init__(self)
+        self.hooked = {}
+        self.bugfixed = False
+
+        # 74sp1 BUGFIX: IDAPython: ida_kernwin.UI_Hooks.preprocess_action()
+        # wouldn't allow inhibiting the action
+        pattern = re.compile('preprocess_action\(self, name\) -> int')
+        if pattern.search(ida_kernwin.UI_Hooks.preprocess_action.__doc__):
+            self.bugfixed = True
+
+    def minver74sp1(self):
+        # idaapi.IDA_SDK_VERSION >= 740:
+        return self.bugfixed
+
+    def add_hook(self, action_name, callback):
+        self.hooked[action_name] = callback
+
+    def del_hook(self, action_name):
+        del self.hooked[action_name]
+
+    def preprocess_action(self, action_name):
+        if action_name not in self.hooked:
+            return 0
+
+        self.hooked[action_name]()
+        return 1
+
+
+# --------------------------------------------------------------------------
+
+
 class SyncForm_t(PluginForm):
 
     hotkeys_ctx = []
+    cmd_hooks = CmdHook()
 
     def cb_broker_started(self):
         rs_log("broker started")
@@ -982,10 +1021,19 @@ class SyncForm_t(PluginForm):
             for hk_info in hotkeys_info:
                 self.init_single_hotkey(*hk_info)
 
+        # enable ida_kernwin.UI_Hooks
+        if self.cmd_hooks.minver74sp1():
+            self.cmd_hooks.hook()
+
     def init_single_hotkey(self, key, fnCb, conflict=None):
-        # 'mute' existing action shortcut if present
         if conflict:
-            ida_kernwin.update_action_shortcut(conflict, None)
+            if self.cmd_hooks.minver74sp1():
+                # 'hook' existing action shortcut when possible
+                self.cmd_hooks.add_hook(conflict, fnCb)
+                return
+            else:
+                # 'mute' existing action shortcut
+                ida_kernwin.update_action_shortcut(conflict, None)
 
         ctx = idaapi.add_hotkey(key, fnCb)
         if ctx is None:
@@ -995,6 +1043,10 @@ class SyncForm_t(PluginForm):
             self.hotkeys_ctx.append((ctx, key, conflict))
 
     def uninit_hotkeys(self):
+        # disable ida_kernwin.UI_Hooks
+        if self.cmd_hooks.minver74sp1():
+            self.cmd_hooks.unhook()
+
         if not self.hotkeys_ctx:
             return
 
@@ -1005,7 +1057,7 @@ class SyncForm_t(PluginForm):
             else:
                 rs_log("failed to delete hotkey %s" % key)
 
-            if conflict:
+            if conflict and not self.cmd_hooks.minver74sp1():
                 ida_kernwin.update_action_shortcut(conflict, key)
 
         self.hotkeys_ctx = []
