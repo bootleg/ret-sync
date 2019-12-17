@@ -397,20 +397,21 @@ class Sync(gdb.Command):
 
         self.offset = offset
 
-        mod = self.mod_info(self.offset)
-        if mod:
-            base, sym = mod
+        if self.auto:
+            mod = self.mod_info(self.offset)
+            if mod:
+                base, sym = mod
 
-            if (self.base != base) and self.auto:
-                self.tunnel.send("[notice]{\"type\":\"module\",\"path\":\"%s\"}\n" % sym)
-                self.base = base
+                if (self.base != base) :
+                    self.tunnel.send("[notice]{\"type\":\"module\",\"path\":\"%s\"}\n" % sym)
+                    self.base = base
 
-            self.tunnel.send("[sync]{\"type\":\"loc\",\"base\":%d,\"offset\":%d}\n" % (self.base, self.offset))
-        else:
-            print("[sync] unknown module at current PC: 0x%x" % self.offset)
-            print("[sync] NOTE: will resume sync when at a known module address")
-            self.base = None
-            self.offset = None
+                self.tunnel.send("[sync]{\"type\":\"loc\",\"base\":%d,\"offset\":%d}\n" % (self.base, self.offset))
+            else:
+                print("[sync] unknown module at current PC: 0x%x" % self.offset)
+                print("[sync] NOTE: will resume sync when at a known module address")
+                self.base = None
+                self.offset = None
 
     def create_poll_timer(self):
         if not self.poller:
