@@ -335,9 +335,7 @@ public class RetSyncPlugin extends ProgramPlugin {
             return null;
         }
 
-        if (imageBaseRemote == null) {
-            imageBaseRemote = imageBaseLocal.getNewAddress(base);
-        }
+        imageBaseRemote = imageBaseLocal.getNewAddress(base);
 
         return dest;
     }
