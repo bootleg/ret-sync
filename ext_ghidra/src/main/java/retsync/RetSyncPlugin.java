@@ -331,6 +331,10 @@ public class RetSyncPlugin extends ProgramPlugin {
         moduleBaseRemote = bases;
     }
 
+    boolean isRemoteBaseKnown() {
+        return imageBaseRemote != null;
+    }
+
     // rebase remote address with respect to
     // current program image base
     Address rebase(long base, long offset) {
