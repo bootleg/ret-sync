@@ -181,6 +181,7 @@ public class RequestHandler {
                     for (int i = 0; i < modules.length(); i++) {
                         JSONObject mod = modules.getJSONObject(i);
                         String modname2 = getNormalizedFileName(mod.getString("path"));
+                        modname2 = rsplugin.aliases.getOrDefault(modname2, modname2);
                         long base = mod.getLong("base");
                         if (bases.putIfAbsent(modname2, base) == null) {
                             rsplugin.cs.println(String.format("               0x%x %s", base, modname2));
