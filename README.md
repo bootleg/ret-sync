@@ -264,12 +264,27 @@ are generated in the `%TMP%` folder with a name pattern `retsync.%s.err` .
 
 ## Ghidra extension
 
-### Ghidra prerequisites
+### Build the Ghidra extension
 
-Only the version of Ghidra specified in the plugin's file name is supported.
+Either use the pre-built version from the `ext_ghidra/dist` folder or follow the instruction to build it.
+Each extension build only supports the version of Ghidra specified in the plugin's file name.
 E.g. `ghidra_9.1_PUBLIC_20191104_retsync.zip` is for Ghidra 9.1 Public.
 
-### Ghidra installation
+1. Install Ghidra
+2. Install gradle
+
+```bash
+apt install gradle
+```
+
+3. Build extension for your Ghidra installation (replace `$GHIDRA_DIR` with your installation directory)
+
+```bash
+cd ext_ghidra
+gradle -PGHIDRA_INSTALL_DIR=$GHIDRA_DIR
+```
+
+### Install the Ghidra extension
 
 1. From Ghidra projects manager: ``File`` -> ``Install Extensions...``, click on the
    `+` sign and select the `ext_ghidra/dist/ghidra_*_retsync.zip` and click OK.
