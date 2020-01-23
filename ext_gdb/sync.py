@@ -373,13 +373,15 @@ class Sync(gdb.Command):
             id = open(fd.name, 'r').read()
         return id.strip()
 
-    def mod_info(self, addr):
+    def ensure_maps_loaded(self):
         if not self.maps:
             self.maps = get_maps(ctx=self.ctx)
             if not self.maps:
                 print("[sync] failed to get proc mappings")
                 return None
 
+    def mod_info(self, addr):
+        self.ensure_maps_loaded()
         return get_mod_by_addr(self.maps, addr)
 
     def locate(self):
@@ -403,7 +405,11 @@ class Sync(gdb.Command):
                 base, sym = mod
 
                 if (self.base != base) :
-                    self.tunnel.send("[notice]{\"type\":\"module\",\"path\":\"%s\"}\n" % sym)
+                    modules = []
+                    self.ensure_maps_loaded()
+                    for mod in self.maps:
+                        modules.append("{\"base\":%d,\"path\":\"%s\"}" % (mod[0], mod[3]))
+                    self.tunnel.send("[notice]{\"type\":\"module\",\"path\":\"%s\",\"modules\":[%s]}\n" % (sym, ','.join(modules)))
                     self.base = base
 
                 self.tunnel.send("[sync]{\"type\":\"loc\",\"base\":%d,\"offset\":%d}\n" % (self.base, self.offset))
