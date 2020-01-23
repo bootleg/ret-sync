@@ -156,9 +156,9 @@ public class RetSyncComponent extends ComponentProvider {
 
                     if (pgm.equals(rsplugin.program)) {
                         Address dest = rsplugin.rebaseRemote(loc.getAddress());
-                        rsplugin.reqHandler.curClient.sendCmd(cmd, dest.toString());
-                        rsplugin.cs.println(String.format("    local addr: %s, remote %s", loc.getAddress().toString(),
-                                dest.toString()));
+                        rsplugin.reqHandler.curClient.sendCmd(cmd, String.format("0x%x", dest.getOffset()));
+                        rsplugin.cs.println(String.format("    local addr: %s, remote: 0x%x", loc.getAddress().toString(),
+                                dest.getOffset()));
                     } else {
                         rsplugin.cs.println(String.format("[x] %s failed, %s program not enabled", cmd, pgm.getName()));
                     }
