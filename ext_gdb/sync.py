@@ -793,7 +793,11 @@ class Bx(WrappedCommand):
 
         # Poll tunnel
         msg = self.sync.tunnel.poll()
-        raddr = int(msg.rstrip())
+        msg = msg.rstrip()
+        if msg.startswith('0x'):
+            raddr = int(msg, 16)
+        else:
+            raddr = int(msg)
 
         # Re-enable tunnel polling
         self.sync.create_poll_timer()
