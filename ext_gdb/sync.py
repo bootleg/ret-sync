@@ -521,6 +521,9 @@ class Idblist(WrappedCommand):
         gdb.Command.__init__(self, "idblist", gdb.COMMAND_RUNNING, gdb.COMPLETE_NONE)
 
     def _invoke(self, arg, from_tty):
+        # First disable tunnel polling for commands (happy race...)
+        self.sync.release_poll_timer()
+
         self.sync.tunnel.send("[notice]{\"type\":\"idb_list\"}\n")
 
         # Let time for the dispatcher to reply if it exists
@@ -532,6 +535,9 @@ class Idblist(WrappedCommand):
             print('[sync] idblist failed')
         else:
             print(msg)
+
+        # Re-enable tunnel polling
+        self.sync.create_poll_timer()
 
 
 class Idbn(WrappedCommand):
@@ -545,6 +551,9 @@ class Idbn(WrappedCommand):
             print("[sync] usage: idbn <idb num>")
             return
 
+        # First disable tunnel polling for commands (happy race...)
+        self.sync.release_poll_timer()
+
         self.sync.tunnel.send("[notice]{\"type\":\"idb_n\",\"idb\":\"%s\"}\n" % arg)
 
         # Let time for the dispatcher to reply if it exists
@@ -556,6 +565,9 @@ class Idbn(WrappedCommand):
             print('[sync] idbn failed')
         else:
             print(msg)
+
+        # Re-enable tunnel polling
+        self.sync.create_poll_timer()
 
 
 class Cmt(WrappedCommand):
