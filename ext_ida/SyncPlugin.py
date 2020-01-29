@@ -347,7 +347,7 @@ class RequestHandler(object):
 
             lck = idaapi.lock_func(func)
 
-            limits = idaapi.area_t()
+            limits = idaapi.range_t()
             if idaapi.get_func_limits(func, limits):
                 if limits.start_ea != addr:
                     if (addr > limits.start_ea):
