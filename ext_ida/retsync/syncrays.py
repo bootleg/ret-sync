@@ -91,19 +91,22 @@ class Syncrays(object):
         return update
 
     def cb_loc(self, ea):
+        update = False
+
         # find_item_coords is only available for versions >= 7.2
         if self.safe_mode:
             return
 
-        update = False
-        func_ea = idaapi.get_func(ea).start_ea
+        func = idaapi.get_func(ea)
+        if not func:
+            return
 
-        if self.last_func != func_ea:
+        if self.last_func != func.start_ea:
             self.vdui_t = ida_hexrays.open_pseudocode(ea, 0)
             self.cfunc = self.vdui_t.cfunc
             self.eamap = self.cfunc.get_eamap()
             self.prev_ea = None
-            self.last_func = func_ea
+            self.last_func = func.start_ea
 
         self.lines = self.cfunc.get_pseudocode()
         self.color_ins_vec(self.discarded_ea, rsconfig.COL_BLANK_HEX)
