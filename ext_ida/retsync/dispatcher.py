@@ -461,8 +461,9 @@ if __name__ == "__main__":
                 if os.path.exists(confpath):
                     config = SafeConfigParser({'host': HOST, 'port': PORT})
                     config.read(confpath)
-                    HOST = config.get('INTERFACE', 'host')
-                    PORT = config.getint('INTERFACE', 'port')
+                    if config.has_section('INTERFACE'):
+                        HOST = config.get('INTERFACE', 'host')
+                        PORT = config.getint('INTERFACE', 'port')
                     server.announcement('configuration file loaded')
                     break
     except Exception as e:

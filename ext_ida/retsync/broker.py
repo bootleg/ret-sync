@@ -277,8 +277,9 @@ if __name__ == "__main__":
                 if os.path.exists(confpath):
                     config = SafeConfigParser({'port': PORT, 'host': HOST})
                     config.read(confpath)
-                    PORT = config.getint('INTERFACE', 'port')
-                    HOST = config.get('INTERFACE', 'host')
+                    if config.has_section('INTERFACE'):
+                        PORT = config.getint('INTERFACE', 'port')
+                        HOST = config.get('INTERFACE', 'host')
                     break
     except Exception as e:
         err_log('failed to load configuration file')
