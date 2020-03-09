@@ -1,6 +1,6 @@
 /*
 
-Copyright (C) 2019, Alexandre Gazet.
+Copyright (C) 2019-2020, Alexandre Gazet.
 
 This file is part of ret-sync.
 

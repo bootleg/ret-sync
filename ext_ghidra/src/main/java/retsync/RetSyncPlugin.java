@@ -1,6 +1,6 @@
 /*
 
-Copyright (C) 2019, Alexandre Gazet.
+Copyright (C) 2019-2020, Alexandre Gazet.
 
 This file is part of ret-sync.
 
@@ -110,6 +110,7 @@ public class RetSyncPlugin extends ProgramPlugin {
 
     // default configuration
     private static final boolean DEBUG_CALLBACK = false;
+    protected static final boolean DEBUG_MODULES = false;
     private static final String CONF_INI_FILE = ".sync";
     protected final String SYNC_HOST_DEFAULT = "localhost";
     protected final int SYNC_PORT_DEFAULT = 9100;
@@ -552,7 +553,7 @@ public class RetSyncPlugin extends ProgramPlugin {
         } else {
             curAddr = rebaseRemote(cLoc.getAddress());
         }
-        
+
         return curAddr;
     }
 

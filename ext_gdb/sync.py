@@ -1,5 +1,5 @@
 ﻿#
-# Copyright (C) 2016-2019, Alexandre Gazet.
+# Copyright (C) 2016-2020, Alexandre Gazet.
 #
 # Copyright (C) 2012-2014, Quarkslab.
 #
@@ -404,11 +404,13 @@ class Sync(gdb.Command):
             if mod:
                 base, sym = mod
 
-                if (self.base != base) :
+                if (self.base != base):
                     modules = []
                     self.ensure_maps_loaded()
+
                     for mod in self.maps:
                         modules.append("{\"base\":%d,\"path\":\"%s\"}" % (mod[0], mod[3]))
+
                     self.tunnel.send("[notice]{\"type\":\"module\",\"path\":\"%s\",\"modules\":[%s]}\n" % (sym, ','.join(modules)))
                     self.base = base
 
