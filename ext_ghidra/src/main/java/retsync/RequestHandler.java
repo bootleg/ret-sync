@@ -23,12 +23,15 @@ package retsync;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.commons.io.FilenameUtils;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.JSONTokener;
@@ -119,6 +122,17 @@ public class RequestHandler {
         public NoticeHandler() {
         }
 
+        private String getNormalizedFileName(String pathString) {
+            Path path = Paths.get(pathString);
+
+            // current OS is Linux/Mac while remote OS is Windows
+            if (curClient.isWinOS && System.getProperty("file.separator").equals("/")) {
+                path = Paths.get(FilenameUtils.separatorsToUnix(path.toString()));
+            }
+
+            return path.getFileName().toString();
+        }
+
         public boolean parse(JSONObject notice) {
             boolean bExit = false;
             String type = notice.getString("type");
@@ -156,14 +170,27 @@ public class RequestHandler {
                 rsplugin.syncEnabled = false;
                 rsplugin.clrs.cbColorFinal();
 
-                Path modpath = Paths.get(notice.getString("path"));
+                String modname = getNormalizedFileName(notice.getString("path"));
 
-                // current OS is Linux/Mac while remote OS is Windows
-                if (curClient.isWinOS && System.getProperty("file.separator").equals("/")) {
-                    modpath = Paths.get(FilenameUtils.separatorsToUnix(modpath.toString()));
+                rsplugin.cs.println(String.format("[<] module: %s", modname));
+
+                if (notice.has("modules")) {
+                    Map<String, Long> bases = new HashMap<String, Long>();
+                    JSONArray modules = notice.getJSONArray("modules");
+                    rsplugin.cs.println(String.format("            modules:"));
+                    for (int i = 0; i < modules.length(); i++) {
+                        JSONObject mod = modules.getJSONObject(i);
+                        String modname2 = getNormalizedFileName(mod.getString("path"));
+                        modname2 = rsplugin.aliases.getOrDefault(modname2, modname2);
+                        long base = mod.getLong("base");
+                        if (bases.putIfAbsent(modname2, base) == null) {
+                            rsplugin.cs.println(String.format("               0x%x %s", base, modname2));
+                        } else {
+                            rsplugin.cs.println(String.format("               0x%x %s [SKIPPED]", base, modname2));
+                        }
+                    }
+                    rsplugin.setRemoteModuleBases(bases);
                 }
-
-                String modname = modpath.getFileName().toString();
 
                 // handle sync mode
                 if (!rsplugin.syncModAuto) {

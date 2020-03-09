@@ -373,13 +373,15 @@ class Sync(gdb.Command):
             id = open(fd.name, 'r').read()
         return id.strip()
 
-    def mod_info(self, addr):
+    def ensure_maps_loaded(self):
         if not self.maps:
             self.maps = get_maps(ctx=self.ctx)
             if not self.maps:
                 print("[sync] failed to get proc mappings")
                 return None
 
+    def mod_info(self, addr):
+        self.ensure_maps_loaded()
         return get_mod_by_addr(self.maps, addr)
 
     def locate(self):
@@ -403,7 +405,11 @@ class Sync(gdb.Command):
                 base, sym = mod
 
                 if (self.base != base) :
-                    self.tunnel.send("[notice]{\"type\":\"module\",\"path\":\"%s\"}\n" % sym)
+                    modules = []
+                    self.ensure_maps_loaded()
+                    for mod in self.maps:
+                        modules.append("{\"base\":%d,\"path\":\"%s\"}" % (mod[0], mod[3]))
+                    self.tunnel.send("[notice]{\"type\":\"module\",\"path\":\"%s\",\"modules\":[%s]}\n" % (sym, ','.join(modules)))
                     self.base = base
 
                 self.tunnel.send("[sync]{\"type\":\"loc\",\"base\":%d,\"offset\":%d}\n" % (self.base, self.offset))
@@ -521,6 +527,9 @@ class Idblist(WrappedCommand):
         gdb.Command.__init__(self, "idblist", gdb.COMMAND_RUNNING, gdb.COMPLETE_NONE)
 
     def _invoke(self, arg, from_tty):
+        # First disable tunnel polling for commands (happy race...)
+        self.sync.release_poll_timer()
+
         self.sync.tunnel.send("[notice]{\"type\":\"idb_list\"}\n")
 
         # Let time for the dispatcher to reply if it exists
@@ -532,6 +541,9 @@ class Idblist(WrappedCommand):
             print('[sync] idblist failed')
         else:
             print(msg)
+
+        # Re-enable tunnel polling
+        self.sync.create_poll_timer()
 
 
 class Idbn(WrappedCommand):
@@ -545,6 +557,9 @@ class Idbn(WrappedCommand):
             print("[sync] usage: idbn <idb num>")
             return
 
+        # First disable tunnel polling for commands (happy race...)
+        self.sync.release_poll_timer()
+
         self.sync.tunnel.send("[notice]{\"type\":\"idb_n\",\"idb\":\"%s\"}\n" % arg)
 
         # Let time for the dispatcher to reply if it exists
@@ -556,6 +571,9 @@ class Idbn(WrappedCommand):
             print('[sync] idbn failed')
         else:
             print(msg)
+
+        # Re-enable tunnel polling
+        self.sync.create_poll_timer()
 
 
 class Cmt(WrappedCommand):
@@ -775,7 +793,11 @@ class Bx(WrappedCommand):
 
         # Poll tunnel
         msg = self.sync.tunnel.poll()
-        raddr = int(msg.rstrip())
+        msg = msg.rstrip()
+        if msg.startswith('0x'):
+            raddr = int(msg, 16)
+        else:
+            raddr = int(msg)
 
         # Re-enable tunnel polling
         self.sync.create_poll_timer()

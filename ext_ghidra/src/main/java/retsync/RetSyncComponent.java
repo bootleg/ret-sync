@@ -154,13 +154,13 @@ public class RetSyncComponent extends ComponentProvider {
                     ProgramLocation loc = rsplugin.cvs.getCurrentLocation();
                     Program pgm = loc.getProgram();
 
-                    if (pgm.equals(rsplugin.program)) {
+                    if (rsplugin.isRemoteBaseKnown()) {
                         Address dest = rsplugin.rebaseRemote(loc.getAddress());
-                        rsplugin.reqHandler.curClient.sendCmd(cmd, dest.toString());
-                        rsplugin.cs.println(String.format("    local addr: %s, remote %s", loc.getAddress().toString(),
-                                dest.toString()));
+                        rsplugin.reqHandler.curClient.sendCmd(cmd, String.format("0x%x", dest.getOffset()));
+                        rsplugin.cs.println(String.format("    local addr: %s, remote: 0x%x", loc.getAddress().toString(),
+                                dest.getOffset()));
                     } else {
-                        rsplugin.cs.println(String.format("[x] %s failed, %s program not enabled", cmd, pgm.getName()));
+                        rsplugin.cs.println(String.format("[x] %s failed, remote base of %s program unknown", cmd, pgm.getName()));
                     }
                 }
             }
