@@ -184,6 +184,18 @@ Here we simply tell to the dispatcher to match the name `ntkrnlmp.exe` (real
 name) instead of `ntoskrnl_vuln.exe` (IDB name).
 
 
+## gdb with Qt Creator debugging frontend
+
+The Qt Creator debugging frontend changes the way gdb command output is logged. Since
+this would interfere with the synchronization an option exists to use the raw gdb output
+for synchronization instead of a temporary file. In the .sync configuration file use
+
+```
+[GENERAL]
+use_tmp_logging_file=false
+```
+
+if you wish to use the Qt debugging frontend for the target.
 
 ## Embedded devices and missing ``/proc/<pid>/maps``
 
