@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016-2019, Alexandre Gazet.
+# Copyright (C) 2016-2020, Alexandre Gazet.
 #
 # Copyright (C) 2012-2015, Quarkslab.
 #
@@ -32,6 +32,7 @@ import binascii
 import base64
 import socket
 import json
+import uuid
 
 try:
     from ConfigParser import SafeConfigParser
@@ -481,7 +482,7 @@ class RequestHandler(object):
         elif pdb:
             rs_log("modcheck idb (pdb guid)")
             msg = rs_decode(base64.b64decode(pdb))
-            local = DbgDirHlpr.read_rsds_codeview()
+            local = DbgDirHlpr.read_rsds_guid()
             remote = DbgDirHlpr.parse_itoldyouso_output(msg)
 
         rs_log("    -> remote: <%s>" % remote)
@@ -820,51 +821,23 @@ class Broker(QtCore.QProcess):
 class DbgDirHlpr(object):
 
     @staticmethod
-    def read_rsds_codeview():
+    def read_rsds_guid():
         guid = None
         penode = idaapi.netnode()
         penode.create(idautils.peutils_t.PE_NODE)
-        fpos = penode.altval(idautils.peutils_t.PE_ALT_DBG_FPOS)
+        rsds = penode.getblob(0, "s")
 
-        if (fpos == 0):
-            rs_log('No debug directory')
-            return guid
-
-        input_file = ida_nalt.get_input_file_path()
-        if not os.path.exists(input_file):
-            rs_log('input file not available')
-        else:
-            with open(input_file, 'rb') as fd:
-                fd.seek(fpos)
-                raw = fd.read(0x1C)
-
-                """
-                typedef struct _IMAGE_DEBUG_DIRECTORY {
-                  DWORD Characteristics;
-                  DWORD TimeDateStamp;
-                  WORD  MajorVersion;
-                  WORD  MinorVersion;
-                  DWORD Type;
-                  DWORD SizeOfData;
-                  DWORD AddressOfRawData;
-                  DWORD PointerToRawData;
-                } IMAGE_DEBUG_DIRECTORY, *PIMAGE_DEBUG_DIRECTORY;
-                """
-                dbgdir = struct.unpack('LLHHLLLL', raw)
-                #  2, IMAGE_DEBUG_TYPE_CODEVIEW
-                if not (dbgdir[4] == 2):
-                    rs_log('not CODEVIEW data')
-                else:
-                    fd.seek(dbgdir[7])
-                    if not (fd.read(4).decode('ascii') == 'RSDS'):
-                        rs_log("unsupported CODEVIEW information format (%s)" % sig)
-                    else:
-                        d1, d2, d3 = struct.unpack('LHH', fd.read(0x8))
-                        d4 = struct.unpack('>H', fd.read(0x2))[0]
-                        d5 = binascii.hexlify(fd.read(0x6)).upper()
-                        guid = "%08X-%04X-%04X-%04X-%s" % (d1, d2, d3, d4, d5)
+        if rsds and rsds.startswith(b'RSDS'):
+            guid = ("%s" % uuid.UUID(bytes_le=rsds[4:20])).upper()
 
         return guid
+
+    def read_rsds_pdb():
+        penode = idaapi.netnode()
+        PE_SUPSTR_PDBNM = idautils.peutils_t.PE_ALT_DBG_FPOS - 8
+        penode.create(idautils.peutils_t.PE_NODE)
+        pdbname = penode.supstr(PE_SUPSTR_PDBNM, 'S')
+        return pdbname
 
     @staticmethod
     def parse_itoldyouso_output(res):
@@ -1092,6 +1065,20 @@ class SyncForm_t(PluginForm):
     def cb_hexrays_toggle(self):
         self.cb_hexrays.toggle()
 
+    # issue a warning if pdb name is different from
+    # the name used to register the idb to the dispatcher
+    def pdb_name_warning(self, name):
+        pdbpath = DbgDirHlpr.read_rsds_pdb()
+        if not pdbpath:
+            return
+
+        normpath = os.path.normpath(pdbpath.replace("\\", "\\\\"))
+        pdb_root, pdb_ext = os.path.splitext(os.path.basename(normpath))
+        mod_root, mod_ext = os.path.splitext(name)
+
+        if pdb_root.strip() != mod_root.strip():
+            rs_log("hint: pdb name ('%s') differs from registered module name ('%s')" % (pdb_root+mod_ext, name))
+
     # discover the name used to expose the idb, default is from get_root_filename
     # may be alias with '.sync' conf file, local or from user's home
     def handle_name_aliasing(self):
@@ -1119,6 +1106,7 @@ class SyncForm_t(PluginForm):
                 except Exception as e:
                     err_log('failed to load configuration file')
 
+        self.pdb_name_warning(name)
         return name
 
     def OnCreate(self, form):
