@@ -43,7 +43,7 @@ except ImportError:
 
 HOST = "localhost"
 PORT = 9100
-
+USE_TMP_LOGGING_FILE = True
 TIMER_PERIOD = 0.2
 PYTHON_MAJOR = sys.version_info[0]
 
@@ -85,6 +85,8 @@ def show_last_exception(cmd):
 # function gdb_execute courtesy of StalkR
 # Wrapper when gdb.execute(cmd, to_string=True) does not work
 def gdb_execute(cmd):
+    if not USE_TMP_LOGGING_FILE:
+        return gdb.execute(cmd, to_string=True)
     f = tempfile.NamedTemporaryFile()
     gdb.execute("set logging file %s" % f.name)
     gdb.execute("set logging redirect on")
@@ -927,9 +929,12 @@ if __name__ == "__main__":
 
     for confpath in [os.path.join(p, '.sync') for p in locations]:
         if os.path.exists(confpath):
-            config = configparser.SafeConfigParser({'host': HOST, 'port': PORT, 'context': ''})
+            config = configparser.SafeConfigParser({'host': HOST, 'port': PORT, 'context': '', 'use_tmp_logging_file': USE_TMP_LOGGING_FILE})
             config.read(confpath)
             print("[sync] configuration file loaded from: %s" % confpath)
+            if config.has_section('GENERAL'):
+                USE_TMP_LOGGING_FILE = config.getboolean('GENERAL', 'use_tmp_logging_file')
+                print("       general: use_tmp_logging_file is %s" % USE_TMP_LOGGING_FILE)
 
             if config.has_section('INTERFACE'):
                 HOST = config.get('INTERFACE', 'host')
