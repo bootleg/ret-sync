@@ -832,6 +832,7 @@ class DbgDirHlpr(object):
 
         return guid
 
+    @staticmethod
     def read_rsds_pdb():
         penode = idaapi.netnode()
         PE_SUPSTR_PDBNM = idautils.peutils_t.PE_ALT_DBG_FPOS - 8
