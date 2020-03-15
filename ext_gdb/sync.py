@@ -732,7 +732,7 @@ class Bbt(WrappedCommand):
 
                 # XXX - we don't support a rebase yet
                 self.sync.tunnel.send("[sync]{\"type\":\"rln\",\"raddr\":%d,\"rbase\":%d,\"base\":%d,\"offset\":%d}\n" %
-                                      (raddr, 0x0, self.sync.base, self.sync.offset))
+                                      (raddr, self.sync.base, self.sync.base, self.sync.offset))
 
                 # Let time for the IDB client to reply if it exists
                 time.sleep(0.150)
