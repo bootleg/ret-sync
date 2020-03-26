@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2016-2019, Alexandre Gazet.
+Copyright (C) 2016-2020, Alexandre Gazet.
 
 Copyright (C) 2014-2015, Quarkslab.
 
@@ -352,6 +352,38 @@ HRESULT syncoff()
 }
 
 
+// idblist command implementation
+HRESULT idblist()
+{
+	HRESULT hRes = S_OK;
+	int NbBytesRecvd = 0;
+	LPSTR msg = NULL;
+
+	if (!g_Synchronized) {
+		_plugin_logputs("[sync] not synced, !idblist command unavailable\n");
+		return hRes;
+	}
+
+	ReleasePollTimer();
+
+	hRes = TunnelSend("[notice]{\"type\":\"idb_list\"}\n");
+	if (FAILED(hRes)) {
+		_plugin_logputs("[sync] !idblist failed\n");
+		goto RESTORE_TIMER;
+	}
+
+	hRes = TunnelReceive(&NbBytesRecvd, &msg);
+	if (SUCCEEDED(hRes) & (NbBytesRecvd > 0) & (msg != NULL)) {
+		_plugin_logputs(msg);
+		free(msg);
+	}
+
+RESTORE_TIMER:
+	CreatePollTimer();
+	return hRes;
+}
+
+
 extern "C" __declspec(dllexport) void CBINITDEBUG(CBTYPE cbType, PLUG_CB_INITDEBUG* info)
 {
 	_plugin_logprintf("[sync] debugging of file %s started!\n", (const char*)info->szFileName);
@@ -420,6 +452,13 @@ extern "C" __declspec(dllexport) void CBMENUENTRY(CBTYPE cbType, PLUG_CB_MENUENT
 	}
 	break;
 
+	case MENU_IDB_LIST:
+	{
+		_plugin_logputs("[sync] retrieve idb list");
+		idblist();
+	}
+	break;
+
 	break;
 	}
 }
@@ -441,6 +480,14 @@ static bool cbSyncoffCommand(int argc, char* argv[])
 }
 
 
+static bool cbIdblistCommand(int argc, char* argv[])
+{
+	_plugin_logputs("[sync] idblist command!");
+	idblist();
+	return true;
+}
+
+
 void coreInit(PLUG_INITSTRUCT* initStruct)
 {
 	// register commands
@@ -453,6 +500,9 @@ void coreInit(PLUG_INITSTRUCT* initStruct)
 
 	if (!_plugin_registercommand(pluginHandle, "!syncoff", cbSyncoffCommand, true))
 		_plugin_logputs("[sync] error registering the \"!syncoff\" command!");
+
+	if (!_plugin_registercommand(pluginHandle, "!idblist", cbIdblistCommand, true))
+		_plugin_logputs("[sync] error registering the \"!idblist\" command!");
 
 	// initialize globals
 	g_Synchronized = FALSE;
@@ -483,6 +533,7 @@ void coreStop()
 	// unregister plugin's commands and menu entries
 	_plugin_unregistercommand(pluginHandle, "!sync");
 	_plugin_unregistercommand(pluginHandle, "!syncoff");
+	_plugin_unregistercommand(pluginHandle, "!idblist");
 	_plugin_menuclear(hMenu);
 }
 
@@ -491,4 +542,5 @@ void coreSetup()
 {
 	_plugin_menuaddentry(hMenu, MENU_ENABLE_SYNC, "&Enable sync");
 	_plugin_menuaddentry(hMenu, MENU_DISABLE_SYNC, "&Disable sync");
+	_plugin_menuaddentry(hMenu, MENU_IDB_LIST, "&Retrieve idb list");
 }

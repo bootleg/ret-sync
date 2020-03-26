@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2016, Alexandre Gazet.
+Copyright (C) 2016-2020, Alexandre Gazet.
 
 Copyright (C) 2014-2015, Quarkslab.
 
@@ -31,11 +31,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //menu identifiers
 #define MENU_ENABLE_SYNC 0
 #define MENU_DISABLE_SYNC 1
-
+#define MENU_IDB_LIST 2
 
 //functions
 HRESULT sync(PSTR Args);
 HRESULT syncoff();
+HRESULT idblist();
 void coreInit(PLUG_INITSTRUCT* initStruct);
 void coreStop();
 void coreSetup();
