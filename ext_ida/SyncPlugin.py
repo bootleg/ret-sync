@@ -1203,6 +1203,7 @@ class SyncForm_t(PluginForm):
 
         global SyncForm
         del SyncForm
+        SyncForm = None
 
     def Show(self):
         return PluginForm.Show(self, "ret-sync", options=PluginForm.WOPN_PERSIST)
@@ -1217,6 +1218,8 @@ class RetSyncPlugin(idaapi.plugin_t):
     help = 'Synchronize a debugging session with IDA.'
     wanted_name = 'ret-sync'
     wanted_hotkey = 'Alt-Shift-S'
+    global SyncForm
+    SyncForm = None
 
     def init(self):
         return idaapi.PLUGIN_KEEP
@@ -1230,9 +1233,10 @@ class RetSyncPlugin(idaapi.plugin_t):
             return
 
         global SyncForm
-        SyncForm = SyncForm_t()
-        SyncForm.Show()
-        rs_log("plugin loaded")
+        if not SyncForm:
+            SyncForm = SyncForm_t()
+            SyncForm.Show()
+            rs_log("plugin loaded")
 
 
 def PLUGIN_ENTRY():
