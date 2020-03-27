@@ -59,6 +59,7 @@ except ImportError:
 import idc
 import idaapi
 import idautils
+import ida_bytes
 import ida_graph
 import ida_hexrays
 import ida_kernwin
@@ -303,27 +304,28 @@ class RequestHandler(object):
     # patch memory at specified address using info from debugger
     def req_patch(self, hash):
         addr, value, length = hash['addr'], hash['value'], hash['len']
-        if length != 4 and length != 8:
-            rs_log("[x] unsupported length: %d" % length)
-            return
 
         if length == 4:
-            prev_value = Dword(addr)
-            if MakeDword(addr) != 1:
-                rs_log('[x] MakeDword failed')
-            if PatchDword(addr, value) != 1:
-                rs_log('[x] PatchDword failed')
+            prev_value = idc.get_wide_dword(addr)
+            if not ida_bytes.create_data(ea, FF_DWORD, 4, ida_idaapi.BADADDR):
+                rs_log('[x] ida_bytes.create_data FF_DWORD failed')
+            if not ida_bytes.patch_dword(addr, value):
+                rs_log('[x] patch_dword failed')
             if not idc.op_plain_offset(addr, 0, 0):
                 rs_log('[x] op_plain_offset failed')
 
         elif length == 8:
-            prev_value = Qword(addr)
-            if MakeQword(addr) != 1:
-                rs_log('[x] MakeQword failed')
-            if PatchQword(addr, value) != 1:
-                rs_log('[x] PatchQword failed')
+            prev_value = idc.get_qword(addr)
+            if not ida_bytes.create_data(addr, FF_QWORD, 8, ida_idaapi.BADADDR):
+                rs_log('[x] ida_bytes.create_data FF_QWORD failed')
+            if not ida_bytes.patch_qword(addr, value):
+                rs_log('[x] patch_qword failed')
             if not idc.op_plain_offset(addr, 0, 0):
                 rs_log('[x] op_plain_offset failed')
+
+        else:
+            rs_log("[x] unsupported length: %d" % length)
+            return
 
         rs_log("patched 0x%x = 0x%x (previous was 0x%x)" % (addr, value, prev_value))
 
