@@ -96,7 +96,10 @@ Python standard libraries for releases 2.7 and newer.
 Pre-built binaries for WinDbg/OllyDbg/OllyDbg2/x64dbg debuggers are proposed
 through an ``Azure DevOps`` pipeline: [![Build Status](https://dev.azure.com/bootlegdev/ret-sync-release/_apis/build/status/ret-sync-release-CI?branchName=master)](https://dev.azure.com/bootlegdev/ret-sync-release/_build/latest?definitionId=8?branchName=master)
 
-Simply select the last build and check the ``Artifacts`` button.
+Select the last build and check under the ``Related`` section: ``6 published``.
+
+![](img/pipeline.png) 
+
 
 A pre-built plugin archive of the Ghidra plugin is provided in `ext_ghidra/dist`.
 
