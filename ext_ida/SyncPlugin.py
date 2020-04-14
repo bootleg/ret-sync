@@ -523,7 +523,7 @@ class RequestHandler(object):
         elif(subtype == 'notice'):
             # notice from broker
             self.broker_port = int(hash['port'])
-            rs_log("<< broker << listening on port %d" % self.broker_port)
+            rs_debug("<< broker << binding on port %d" % self.broker_port)
 
             for attempt in range(rsconfig.CONNECT_BROKER_MAX_ATTEMPT):
                 try:
@@ -542,6 +542,10 @@ class RequestHandler(object):
                     if (attempt == (rsconfig.CONNECT_BROKER_MAX_ATTEMPT - 1)):
                         self.announcement("[sync] failed to connect to broker (attempt %d)" % attempt)
                         raise RuntimeError
+
+            # request broker to validate its beacon
+            time.sleep(0.4)
+            self.beacon_notice()
 
         # enable/disable idb, if disable it drops most sync requests
         elif(subtype == 'enable_idb'):
@@ -615,6 +619,10 @@ class RequestHandler(object):
     # send a kill notice to the broker (then forwarded to the dispatcher)
     def kill_notice(self):
         self.notice_broker("kill")
+
+    # send a beacon notice to the broker
+    def beacon_notice(self):
+        self.notice_broker('beacon')
 
     # send a bp command (F2) to the debugger (via the broker and dispatcher)
     def bp_notice(self, oneshot=False):
@@ -816,6 +824,7 @@ class Broker(QtCore.QProcess):
 
         # create a request handler
         self.worker = RequestHandler(parser)
+
 
 # --------------------------------------------------------------------------
 

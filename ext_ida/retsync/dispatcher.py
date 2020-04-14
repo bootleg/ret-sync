@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016-2019, Alexandre Gazet.
+# Copyright (C) 2016-2020, Alexandre Gazet.
 #
 # Copyright (C) 2012-2015, Quarkslab.
 #
@@ -29,6 +29,7 @@ import socket
 import select
 import re
 import traceback
+from contextlib import contextmanager
 try:
     from ConfigParser import SafeConfigParser
 except ImportError:
@@ -100,23 +101,35 @@ class DispatcherSrv():
             'idb_n': self.req_idb_n,
             'idb_list': self.req_idb_list,
             'module': self.req_module,
+            'dbg_err': self.req_dbg_err,
             'sync_mode': self.req_sync_mode,
             'cmd': self.req_cmd,
             'bc': self.req_bc,
             'kill': self.req_kill
         }
 
+    def is_port_available(self, host, port):
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            if sys.platform == 'win32':
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            sock.bind((host, port))
+        finally:
+            sock.close()
+
+    def bind_sock(self, host, port):
+        self.is_port_available(host, port)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind((host, port))
+        self.srv_socks.append(sock)
+        return sock
+
     def bind(self, host, port):
-        self.dbg_srv_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.dbg_srv_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.dbg_srv_sock.bind((host, port))
-        self.srv_socks.append(self.dbg_srv_sock)
+        self.dbg_srv_sock = self.bind_sock(host, port)
 
         if not (socket.gethostbyname(host) == '127.0.0.1'):
-            self.localhost_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.localhost_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.localhost_sock.bind(('localhost', port))
-            self.srv_socks.append(self.localhost_sock)
+            self.localhost_sock = self.bind_sock('127.0.0.1', port)
 
     def accept(self, s):
         new_socket, addr = s.accept()
@@ -179,7 +192,7 @@ class DispatcherSrv():
                 self.dbg_quit()
             else:
                 self.client_quit(client.srv_sock)
-                self.broadcast("a client quit, nb client(s) left: %d" % len(self.idb_clients))
+                self.broadcast("a client quit, %d client(s) left" % len(self.idb_clients))
 
             return []
 
@@ -250,6 +263,10 @@ class DispatcherSrv():
         for idbc in self.idb_clients:
             self.forward(msg, idbc.client_sock)
 
+    # send a beacon to the broker
+    def send_beacon(self, s):
+        s.sendall(rs_encode("[notice]{\"type\":\"dispatcher\",\"subtype\":\"beacon\"}\n"))
+
     # disable current idb and enable new idb matched from current module name
     def switch_idb(self, new_idb):
         msg = "[sync]{\"type\":\"broker\",\"subtype\":\"%s\"}\n"
@@ -276,6 +293,9 @@ class DispatcherSrv():
             self.opened_socks.remove(srv_sock)
             srv_sock.close()
             return
+
+        # send beacon to acknowledge dispatcher presence
+        self.send_beacon(client_sock)
 
         # check if an idb client is already registered with the same name
         conflicting = [client for client in self.idb_clients if (client.name == name)]
@@ -429,11 +449,16 @@ class DispatcherSrv():
             if self.current_idb and self.current_idb.enabled:
                 self.switch_idb(None)
 
+    # dbg notice of error, e.g. current module resolution failed
+    def req_dbg_err(self, s, hash):
+        if self.sync_mode_auto:
+            self.switch_idb(None)
+
     # sync mode tells if idb switch is automatic or manual
     def req_sync_mode(self, s, hash):
         mode = hash['auto']
         self.broadcast("sync mode auto set to %s" % mode)
-        self.sync_mode_auto = (mode == "on")
+        self.sync_mode_auto = (mode == 'on')
 
     # bc request should be forwarded to all idbs
     def req_bc(self, s, hash):
@@ -444,17 +469,31 @@ class DispatcherSrv():
         cmd = "%s\n" % hash['cmd']
         self.current_dbg.client_sock.sendall(rs_encode(cmd))
 
+    # use logging facility to record the exception and exit
+    def err_log(self, msg):
+        rs_log.exception(msg, exc_info=True)
+        try:
+            self.announcement('dispatcher stopped')
+            [sckt.close() for sckt in self.srv_socks]
+        except Exception:
+            pass
+        finally:
+            sys.exit()
 
-def err_log(msg):
-    rs_log.debug(msg, exc_info=True)
-    sys.exit()
+
+@contextmanager
+def error_reporting(stage, info=None):
+    try:
+        yield
+    except Exception as e:
+        server.err_log(' error - '.join(filter(None, (stage, info))))
 
 
 if __name__ == "__main__":
 
     server = DispatcherSrv()
 
-    try:
+    with error_reporting('server.config'):
         for loc in ('IDB_PATH', 'USERPROFILE', 'HOME'):
             if loc in os.environ:
                 confpath = os.path.join(os.path.realpath(os.environ[loc]), '.sync')
@@ -466,16 +505,9 @@ if __name__ == "__main__":
                         PORT = config.getint('INTERFACE', 'port')
                     server.announcement('configuration file loaded')
                     break
-    except Exception as e:
-        err_log('failed to load configuration file')
 
-    try:
+    with error_reporting('server.bind', '(%s:%s)' % (HOST, PORT)):
         server.bind(HOST, PORT)
-    except Exception as e:
-        err_log("server.bind error %s:%s" % (HOST, PORT))
 
-    try:
+    with error_reporting('server.loop'):
         server.loop()
-    except Exception as e:
-        server.announcement('dispatcher stopped')
-        err_log('server.loop error')

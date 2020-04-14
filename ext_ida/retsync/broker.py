@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016-2019, Alexandre Gazet.
+# Copyright (C) 2016-2020, Alexandre Gazet.
 #
 # Copyright (C) 2012-2015, Quarkslab.
 #
@@ -30,6 +30,7 @@ import argparse
 import subprocess
 import socket
 import select
+from contextlib import contextmanager
 
 try:
     from ConfigParser import SafeConfigParser
@@ -106,7 +107,6 @@ class BrokerSrv():
         tokenizer = shlex.shlex(cmdline)
         tokenizer.whitespace_split = True
         args = [arg.replace('\"', '') for arg in list(tokenizer)]
-
         try:
             proc = subprocess.Popen(args, shell=False,
                                     stdout=subprocess.PIPE,
@@ -114,8 +114,7 @@ class BrokerSrv():
             pid = proc.pid
         except (OSError, ValueError):
             pid = None
-            self.announcement('failed to run dispatcher')
-            err_log('failed to run dispatcher')
+            self.err_log('failed to run dispatcher')
 
         time.sleep(0.2)
         return pid
@@ -125,7 +124,7 @@ class BrokerSrv():
             try:
                 self.notify_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.notify_socket.settimeout(2)
-                self.notify_socket.connect((HOST, PORT))
+                self.notify_socket.connect(('127.0.0.1', PORT))
                 break
             except socket.error:
                 self.notify_socket.close()
@@ -163,16 +162,18 @@ class BrokerSrv():
             if data == '':
                 raise Exception('rabbit eating the cable')
         except socket.error:
-            self.announcement('dispatcher connection error, quitting')
-            sys.exit()
+            self.err_log('dispatcher connection error, quitting')
 
         return client.feed(data)
 
     def req_dispatcher(self, s, hash):
         subtype = hash['subtype']
-        if (subtype == 'msg'):
+        if subtype == 'msg':
             msg = hash['msg']
             self.announcement("dispatcher msg: %s" % msg)
+        elif subtype == 'beacon':
+            # dispatcher sends a beacon at startup
+            self.beaconed = True
 
     def req_cmd(self, s, hash):
         cmd = hash['cmd']
@@ -185,6 +186,12 @@ class BrokerSrv():
             s.close()
         sys.exit()
 
+    # idb is checking if broker has received beacon from dispatcher
+    def req_beacon(self, s, hash):
+        if not self.beaconed:
+            self.announcement('beacon not received (possible dispatcher error)')
+            self.req_kill(s, hash)
+
     def parse_exec(self, s, req):
         if not (req[0:8] == '[notice]'):
             self.puts(req)
@@ -195,7 +202,7 @@ class BrokerSrv():
         try:
             hash = json.loads(req)
         except ValueError:
-            print("[-] broker failed to parse json\n %s" % repr(req))
+            self.announcement("[-] broker failed to parse json\n %s" % repr(req))
             return
 
         type = hash['type']
@@ -239,38 +246,55 @@ class BrokerSrv():
                 else:
                     self.handle(s)
 
-    def __init__(self, name):
-        self.name = name
+    # use logging facility to record the exception and exit
+    def err_log(self, msg):
+        rs_log.exception(msg, exc_info=True)
+        try:
+            # inform idb and dispatcher
+            self.announcement(msg)
+            self.notice_dispatcher('kill')
+        except Exception as e:
+            pass
+        finally:
+            sys.exit()
+
+    def __init__(self):
+        self.name = None
+        self.beaconed = False
         self.opened_sockets = []
         self.clients_list = []
         self.pat = re.compile('dbg disconnected')
         self.req_handlers = {
             'dispatcher': self.req_dispatcher,
             'cmd': self.req_cmd,
-            'kill': self.req_kill
+            'kill': self.req_kill,
+            'beacon': self.req_beacon
         }
 
 
-def err_log(msg=''):
-    rs_log.debug(msg, exc_info=True)
-    sys.exit()
+@contextmanager
+def error_reporting(stage, info=None):
+    try:
+        yield
+    except Exception as e:
+        server.err_log(' error - '.join(filter(None, (stage, info))))
 
 
 if __name__ == "__main__":
 
-    try:
+    server = BrokerSrv()
+
+    with error_reporting('server.env', 'PYTHON_PATH not found'):
         PYTHON_PATH = os.environ['PYTHON_PATH']
-    except Exception as e:
-        err_log('broker failed to retrieve PYTHON_PATH value from env')
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--idb', nargs=1, action='store')
     args = parser.parse_args()
 
-    if not args.idb:
-        err_log('[sync] no idb argument')
+    with error_reporting('server.arg', 'missing idb argument'):
+        server.name = args.idb[0]
 
-    try:
+    with error_reporting('server.config'):
         for loc in ('IDB_PATH', 'USERPROFILE', 'HOME'):
             if loc in os.environ:
                 confpath = os.path.join(os.path.realpath(os.environ[loc]), '.sync')
@@ -281,25 +305,12 @@ if __name__ == "__main__":
                         PORT = config.getint('INTERFACE', 'port')
                         HOST = config.get('INTERFACE', 'host')
                     break
-    except Exception as e:
-        err_log('failed to load configuration file')
 
-    server = BrokerSrv(args.idb[0])
-
-    try:
+    with error_reporting('server.bind'):
         server.bind()
-    except socket.error as e:
-        server.announcement('failed to bind')
-        err_log('server.bind error')
 
-    try:
+    with error_reporting('server.notify'):
         server.notify()
-    except Exception as e:
-        server.announcement('failed to notify dispatcher')
-        err_log('server.notify error')
 
-    try:
+    with error_reporting('server.loop'):
         server.loop()
-    except Exception as e:
-        server.announcement('broker stop')
-        err_log('server.loop error')
