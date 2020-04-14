@@ -24,10 +24,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 extern BOOL g_Synchronized;
 
-extern void dbgout(char *fmt, ...);
-
-extern void dbgoutW(wchar_t* fmt, ...);
-
 HRESULT TunnelIsUp();
 
 HRESULT TunnelCreate(PCSTR Host, PCSTR Port);
@@ -45,8 +41,5 @@ HRESULT ToBase64(const BYTE *pbBinary, DWORD cbBinary, LPSTR *pszString);
 HRESULT FromBase64(LPSTR pszString, BYTE **ppbBinary);
 
 HRESULT WsaErrMsg(int LastError);
-
-HRESULT convert_tow(const char * mbstr,  PTCH *wcstr);
-
 
 #endif // _TUNNEL_H

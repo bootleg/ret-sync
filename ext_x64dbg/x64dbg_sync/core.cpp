@@ -33,8 +33,9 @@ static CHAR *g_DefaultHost = "127.0.0.1";
 static CHAR *g_DefaultPort = "9100";
 
 // Command polling feature
-static HANDLE g_hPollTimer;
-static HANDLE g_hPollCompleteEvent;
+static HANDLE g_hPollTimer = INVALID_HANDLE_VALUE;
+static HANDLE g_hSyncTimer = INVALID_HANDLE_VALUE;
+static HANDLE g_hPollCompleteEvent = INVALID_HANDLE_VALUE;
 static CRITICAL_SECTION g_CritSectPollRelease;
 
 // Debuggee's state;
@@ -109,7 +110,6 @@ failed:
 HRESULT
 UpdateState()
 {
-	BOOL bRes = FALSE;
 	HRESULT hRes = E_FAIL;
 	DWORD dwRes = 0;
 	ULONG_PTR PrevBase = g_Base;
@@ -121,7 +121,7 @@ UpdateState()
 	if (!g_Base)
 	{
 		_plugin_logprintf("[sync] UpdateState(%p): could not get module base...\n", g_Offset);
-		return hRes;
+		goto UPDATE_FAILURE;
 	}
 
 #if VERBOSE >= 2
@@ -137,7 +137,7 @@ UpdateState()
 		if (dwRes == 0)
 		{
 			_plugin_logprintf("[sync] UpdateState(%p): could not get module name...\n", g_Offset);
-			return hRes;
+			goto UPDATE_FAILURE;
 		}
 
 #if VERBOSE >= 2
@@ -146,7 +146,6 @@ UpdateState()
 
 		hRes = TunnelSend("[notice]{\"type\":\"module\",\"path\":\"%s\"}\n", g_NameBuffer);
 		if (FAILED(hRes)) {
-
 			return hRes;
 		}
 	}
@@ -156,6 +155,16 @@ UpdateState()
 #else
 	hRes = TunnelSend("[sync]{\"type\":\"loc\",\"base\":%u,\"offset\":%u}\n", g_Base, g_Offset);
 #endif
+
+	return hRes;
+
+UPDATE_FAILURE:
+	// Inform the dispatcher that an error occured in the state update
+	if (g_Base != NULL)
+	{
+		TunnelSend("[notice]{\"type\":\"mod_err\"}\n");
+		g_Base = NULL;
+	}
 
 	return hRes;
 }
@@ -175,7 +184,7 @@ PollCmd()
 
 	if (SUCCEEDED(hRes) & (NbBytesRecvd > 0) & (msg != NULL))
 	{
-		next = orig = msg;
+		orig = msg;
 
 		while ((msg - orig) < NbBytesRecvd)
 		{
@@ -189,7 +198,7 @@ PollCmd()
 
 			bRes = DbgCmdExec(msg);
 			if (!bRes) {
-				dbgout("[sync] received command: %s (not yet implemented)\n", msg);
+				_plugin_logprintf("[sync] received command: %s (not yet implemented)\n", msg);
 			}
 
 			// No more command
@@ -231,7 +240,7 @@ void ReleasePollTimer()
 				bRes = DeleteTimerQueueTimer(NULL, g_hPollTimer, g_hPollCompleteEvent);
 				if (!bRes) {
 #if VERBOSE >= 2
-					_plugin_logputs("[sync] ReleasePollTimer called\n");
+					_plugin_logputs("[sync] ReleasePollTimer failed\n");
 #endif
 				}
 
@@ -289,8 +298,69 @@ CreatePollTimer()
 		NULL, TIMER_PERIOD, TIMER_PERIOD, WT_EXECUTEINTIMERTHREAD);
 
 	if (!(bRes)) {
-		_plugin_logputs("[sync] failed to CreatePollTimer\n");
+		g_hPollTimer = INVALID_HANDLE_VALUE;
+		_plugin_logputs("[sync] CreatePollTimer failed\n");
 	}
+}
+
+
+// Sync connection timer callback, run after a 1s timeout
+VOID 
+CALLBACK SyncTimerCb(PVOID lpParameter, BOOL TimerOrWaitFired)
+{
+	UNREFERENCED_PARAMETER(lpParameter);
+	UNREFERENCED_PARAMETER(TimerOrWaitFired);
+
+	_plugin_logputs("[sync] detecting possible connect timeout\n");
+}
+
+
+// Setup poll timer callback
+VOID
+CreateSyncTimer()
+{
+	BOOL bRes;
+
+	bRes = CreateTimerQueueTimer(&g_hSyncTimer, NULL, (WAITORTIMERCALLBACK)SyncTimerCb,
+		NULL, SYNC_TIMER_DELAY, 0, WT_EXECUTEONLYONCE);
+
+	if (!(bRes)) {
+		g_hSyncTimer = INVALID_HANDLE_VALUE;
+		_plugin_logputs("[sync] CreateSyncTimer failed\n");
+	}
+}
+
+
+void ReleaseSyncTimer()
+{
+	BOOL bRes = FALSE;
+	DWORD dwErr = 0;
+
+#if VERBOSE >= 2
+	_plugin_logputs("[sync] ReleaseSyncTimer called\n");
+#endif
+
+	if (g_hSyncTimer != INVALID_HANDLE_VALUE)
+	{
+		bRes = DeleteTimerQueueTimer(NULL, g_hSyncTimer, NULL);
+		if (!bRes)
+		{
+			// msdn: If the error code is ERROR_IO_PENDING, it is not necessary to
+			// call this function again. For any other error, you should retry the call.
+			dwErr = GetLastError();
+
+			if (dwErr != ERROR_IO_PENDING) {
+				bRes = DeleteTimerQueueTimer(NULL, g_hSyncTimer, NULL);
+				if (!bRes) {
+#if VERBOSE >= 2
+					_plugin_logputs("[sync] ReleaseSyncTimer failed\n");
+#endif
+				}
+			}
+		}
+	}
+
+	g_hSyncTimer = INVALID_HANDLE_VALUE;
 }
 
 
@@ -310,11 +380,19 @@ HRESULT sync(PSTR Args)
 		goto Exit;
 	}
 
-	if (FAILED(hRes = TunnelCreate(g_DefaultHost, g_DefaultPort)))
+	_plugin_logprintf("[sync] attempting to connect to %s:%s\n", g_DefaultHost, g_DefaultPort);
+
+	CreateSyncTimer();
+
+	hRes = TunnelCreate(g_DefaultHost, g_DefaultPort);
+	if (FAILED(hRes))
 	{
 		_plugin_logputs("[sync] sync failed\n");
+		ReleaseSyncTimer();
 		goto Exit;
 	}
+
+	ReleaseSyncTimer();
 
 	_plugin_logputs("[sync] probing connection\n");
 
@@ -330,7 +408,6 @@ HRESULT sync(PSTR Args)
 	CreatePollTimer();
 
 Exit:
-
 	return hRes;
 }
 
@@ -341,6 +418,7 @@ HRESULT syncoff()
 	HRESULT hRes = S_OK;
 
 	if (!g_Synchronized) {
+		_plugin_logputs("[sync] not synced\n");
 		return hRes;
 	}
 
@@ -495,7 +573,7 @@ void coreInit(PLUG_INITSTRUCT* initStruct)
 	_plugin_logprintf("[sync] pluginHandle: %d\n", pluginHandle);
 #endif
 
-	if (!_plugin_registercommand(pluginHandle, "!sync", cbSyncCommand, false))
+	if (!_plugin_registercommand(pluginHandle, "!sync", cbSyncCommand, true))
 		_plugin_logputs("[sync] error registering the \"!sync\" command!");
 
 	if (!_plugin_registercommand(pluginHandle, "!syncoff", cbSyncoffCommand, true))
