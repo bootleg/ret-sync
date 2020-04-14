@@ -61,8 +61,11 @@ import idaapi
 import idautils
 import ida_bytes
 import ida_graph
+import ida_range
+import ida_funcs
 import ida_hexrays
 import ida_kernwin
+import ida_idaapi
 import ida_dbg
 import ida_nalt
 
@@ -142,7 +145,7 @@ class RequestHandler(object):
 
     # check if address is within a valid segment
     def is_safe(self, offset):
-        return not (idc.get_segm_start(offset) == idaapi.BADADDR)
+        return not (idc.get_segm_start(offset) == ida_idaapi.BADADDR)
 
     # rebase address with respect to local image base
     def rebase(self, base, offset):
@@ -191,8 +194,8 @@ class RequestHandler(object):
     def append_cmt(self, ea, cmt, rptble=False):
         if len(cmt) > 1024:
             rs_log("warning, comment needs to be splitted (from 0x%x)" % ea)
-            nh = idaapi.next_head(ea, idaapi.BADADDR)
-            if nh == idaapi.BADADDR:
+            nh = idaapi.next_head(ea, ida_idaapi.BADADDR)
+            if nh == ida_idaapi.BADADDR:
                 rs_log('[x] failed to find next instruction candidate')
                 return
 
@@ -349,9 +352,13 @@ class RequestHandler(object):
                 return
 
             lck = idaapi.lock_func(func)
+            limits = ida_range.range_t()
+            rs = ida_range.rangeset_t()
 
-            limits = idaapi.range_t()
-            if idaapi.get_func_limits(func, limits):
+            if ida_funcs.get_func_ranges(rs, func) != ida_idaapi.BADADDR:
+                limits.start_ea = rs.begin().start_ea
+                limits.end_ea = rs.begin().end_ea
+
                 if limits.start_ea != addr:
                     if (addr > limits.start_ea):
                         sym = "%s%s0x%x" % (sym, "+", addr - limits.start_ea)
@@ -479,7 +486,7 @@ class RequestHandler(object):
 
         if md5:
             rs_log("modcheck idb (md5)")
-            local = rs_decode(idaapi.retrieve_input_file_md5())
+            local = rs_decode(binascii.hexlify(idaapi.retrieve_input_file_md5()))
             remote = (''.join(md5.split())).upper()
         elif pdb:
             rs_log("modcheck idb (pdb guid)")
@@ -824,7 +831,6 @@ class Broker(QtCore.QProcess):
 
         # create a request handler
         self.worker = RequestHandler(parser)
-
 
 # --------------------------------------------------------------------------
 
