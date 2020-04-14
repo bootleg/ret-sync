@@ -29,6 +29,7 @@ EXPORTS
     syncoff
     synchelp
     syncmodauto
+    curmod
     cmd
     cmt
     rcmt

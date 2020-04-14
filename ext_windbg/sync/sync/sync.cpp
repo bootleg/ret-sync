@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2016, Alexandre Gazet.
+Copyright (C) 2016-2020, Alexandre Gazet.
 
 Copyright (C) 2012-2015, Quarkslab.
 
@@ -196,7 +196,7 @@ UpdateState()
     hRes = g_ExtRegisters->GetInstructionOffset(&g_Offset);
     if (FAILED(hRes)){
         dprintf("[sync] failed to GetInstructionOffset\n");
-        return hRes;
+        goto UPDATE_FAILURE;
     }
 
     /*
@@ -206,7 +206,7 @@ UpdateState()
     hRes = g_ExtSymbols->GetModuleByOffset(g_Offset, 0, NULL, &g_Base);
     if (FAILED(hRes)){
         dprintf("[sync] failed to GetModuleByOffset for offset: 0x%I64x\n", g_Offset);
-        return hRes;
+        goto UPDATE_FAILURE;
     }
 
     // Check if we are in a new module
@@ -233,6 +233,17 @@ UpdateState()
     }
 
     hRes = TunnelSend("[sync]{\"type\":\"loc\",\"base\":%llu,\"offset\":%llu}\n", g_Base, g_Offset);
+    return hRes;
+
+UPDATE_FAILURE:
+    // Inform the dispatcher that an error occured in the state update
+    if (g_Base != NULL)
+    {
+        TunnelSend("[notice]{\"type\":\"mod_err\"}\n");
+        dprintf("       hint: .reload command may help");
+        g_Base = NULL;
+    }
+
     return hRes;
 }
 
@@ -729,6 +740,57 @@ syncmod_arg_fail:
 // execute a command and dump its output
 HRESULT
 CALLBACK
+curmod(PDEBUG_CLIENT4 Client, PCSTR Args)
+{
+    HRESULT hRes;
+    ULONG64 Offset = 0;
+    ULONG64 Base = 0;
+    ULONG NameSize = 0;
+    CHAR NameBuffer[MAX_NAME] = {0};
+
+    /*
+    msdn: GetInstructionOffset method returns the location of
+    the current thread's current instruction.
+    */
+    hRes = g_ExtRegisters->GetInstructionOffset(&Offset);
+    if (FAILED(hRes)) {
+        dprintf("[sync] failed to GetInstructionOffset\n");
+        return hRes;
+    }
+
+    dprintf("[sync] instruction offset: %p\n", Offset);
+
+    /*
+    msdn: GetModuleByOffset method searches through the target's modules for one
+    whose memory allocation includes the specified location.
+    */
+    hRes = g_ExtSymbols->GetModuleByOffset(Offset, 0, NULL, &Base);
+    if (FAILED(hRes)) {
+        dprintf("[sync] failed to GetModuleByOffset for offset: 0x%I64x\n", Base);
+        return hRes;
+    }
+
+    dprintf("       module base: %p\n", Base);
+
+    /*
+    Update module name stored in g_NameBuffer
+    msdn: GetModuleNameString  method returns the name of the specified module.
+    */
+    hRes = g_ExtSymbols->GetModuleNameString(DEBUG_MODNAME_LOADED_IMAGE, DEBUG_ANY_ID, Base, NameBuffer, MAX_NAME, &NameSize);
+    if (SUCCEEDED(hRes)) {
+        if ((NameSize > 0) & (((char)*NameBuffer) != 0))
+        {
+            dprintf("       module name: %s\n", NameBuffer);
+        }
+    }
+
+    return hRes;
+}
+
+
+// execute a command and dump its output
+HRESULT
+CALLBACK
 cmd(PDEBUG_CLIENT4 Client, PCSTR Args)
 {
     HRESULT hRes = S_OK;
@@ -991,10 +1053,12 @@ idblist(PDEBUG_CLIENT4 Client, PCSTR Args)
     dprintf("[sync] !idblist called\n");
 #endif
 
+    ReleasePollTimer();
+
     hRes = TunnelSend("[notice]{\"type\":\"idb_list\"}\n");
     if (FAILED(hRes)){
         dprintf("[sync] !idblist failed\n");
-        return hRes;
+        goto TIMER_REARM_EXIT;
     }
 
     hRes = TunnelReceive(&NbBytesRecvd, &msg);
@@ -1003,6 +1067,8 @@ idblist(PDEBUG_CLIENT4 Client, PCSTR Args)
         free(msg);
     }
 
+TIMER_REARM_EXIT:
+    CreatePollTimer();
     return hRes;
 }
 
@@ -1025,10 +1091,12 @@ idbn(PDEBUG_CLIENT4 Client, PCSTR Args)
     dprintf("[sync] !idbn called\n");
 #endif
 
+    ReleasePollTimer();
+
     hRes = TunnelSend("[notice]{\"type\":\"idb_n\",\"idb\":\"%s\"}\n", Args);
     if (FAILED(hRes)){
         dprintf("[sync] !idblist failed\n");
-        return hRes;
+        goto TIMER_REARM_EXIT;
     }
 
     hRes = TunnelReceive(&NbBytesRecvd, &msg);
@@ -1037,6 +1105,8 @@ idbn(PDEBUG_CLIENT4 Client, PCSTR Args)
         free(msg);
     }
 
+TIMER_REARM_EXIT:
+    CreatePollTimer();
     return hRes;
 }
 
@@ -1437,6 +1507,8 @@ bpcmds(PDEBUG_CLIENT4 Client, PCSTR Args)
         msg = (char *)Args;
     }
 
+    ReleasePollTimer();
+
     if ((strncmp("load", msg, 4) == 0) || (strncmp("query", msg, 5) == 0))
     {
         dprintf("[sync] query idb for bpcmds\n");
@@ -1450,7 +1522,7 @@ bpcmds(PDEBUG_CLIENT4 Client, PCSTR Args)
         if (FAILED(hRes) || FAILED(g_CmdBuffer.hRes))
         {
             dprintf("[sync] failed to evaluate .bpcmds command\n");
-            return E_FAIL;
+            goto TIMER_REARM_EXIT;
         }
 
         cbBinary = g_CmdBuffer.len;
@@ -1471,13 +1543,13 @@ bpcmds(PDEBUG_CLIENT4 Client, PCSTR Args)
     else
     {
         dprintf("[sync] usage !bpcmds <||query|save|load|\n");
-        return E_FAIL;
+        goto TIMER_REARM_EXIT;
     }
 
     // Check if we failed to query the idb client
     if (FAILED(hRes)){
         dprintf("[sync] !bpcmds failed\n");
-        return hRes;
+        goto TIMER_REARM_EXIT;
     }
 
     // Get result from idb client
@@ -1485,7 +1557,7 @@ bpcmds(PDEBUG_CLIENT4 Client, PCSTR Args)
     if (!(SUCCEEDED(hRes) & (NbBytesRecvd > 0) & (query != NULL)))
     {
         dprintf("[sync] !bpcmds failed\n");
-        return hRes;
+        goto TIMER_REARM_EXIT;
     }
 
     // Handle result
@@ -1497,7 +1569,7 @@ bpcmds(PDEBUG_CLIENT4 Client, PCSTR Args)
             free(decoded);
         }
     }
-    else if (strncmp("query", msg, 4) == 0)
+    else if (strncmp("query", msg, 5) == 0)
     {
         hRes = FromBase64(query, (BYTE **)(&decoded));
         if (SUCCEEDED(hRes)) {
@@ -1511,6 +1583,9 @@ bpcmds(PDEBUG_CLIENT4 Client, PCSTR Args)
     }
 
     free(query);
+
+TIMER_REARM_EXIT:
+    CreatePollTimer();
     return hRes;
 }
 
@@ -2027,6 +2102,7 @@ synchelp(PDEBUG_CLIENT4 Client, PCSTR Args)
         "                                    (switch idb and rebase address if necessary)\n"
         " > !jmpraw <expression>           = evaluate expression and sync IDA with result address\n"
         "                                    (use current idb, no idb switch or address rebase)\n"
+        " > !curmod                        = display module infomation for current instruction offset (for troubleshooting)\n"
         " > !modcheck <||md5>              = check current module pdb info or md5 with respect to idb's input file\n"
         " > !modmap <base> <size> <name>   = map a synthetic module over memory range specified by base and size params\n"
         " > !modunmap <base>               = unmap a synthetic module at base address\n"

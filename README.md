@@ -98,7 +98,7 @@ through an ``Azure DevOps`` pipeline: [![Build Status](https://dev.azure.com/boo
 
 Select the last build and check under the ``Related`` section: ``6 published``.
 
-![](img/pipeline.png) 
+![](img/pipeline.png)
 
 
 A pre-built plugin archive of the Ghidra plugin is provided in `ext_ghidra/dist`.
@@ -491,6 +491,7 @@ WinDbg specific commands:
 
 | Debugger command           | Description                                                                               |
 |----------------------------|-------------------------------------------------------------------------------------------|
+| `curmod`  |  Display module infomation for current instruction offset (for troubleshooting) |
 | `modmap <base> <size> <name>` |  A synthetic ("faked") module (defined using its base address and size) is added to the debugger internal list  |
 | `modunmap <base>` |  Remove a previously mapped synthetic module at base address  |
 | `modcheck <\|\|md5>`  |  Use to check if current module really matches IDB's file (ex: module has been updated)  |
