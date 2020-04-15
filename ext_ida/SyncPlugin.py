@@ -486,7 +486,7 @@ class RequestHandler(object):
 
         if md5:
             rs_log("modcheck idb (md5)")
-            local = rs_decode(binascii.hexlify(idaapi.retrieve_input_file_md5()))
+            local = rs_decode(binascii.hexlify(idaapi.retrieve_input_file_md5())).upper()
             remote = (''.join(md5.split())).upper()
         elif pdb:
             rs_log("modcheck idb (pdb guid)")

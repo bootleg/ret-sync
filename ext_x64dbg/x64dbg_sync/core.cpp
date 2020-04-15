@@ -162,7 +162,7 @@ UPDATE_FAILURE:
 	// Inform the dispatcher that an error occured in the state update
 	if (g_Base != NULL)
 	{
-		TunnelSend("[notice]{\"type\":\"mod_err\"}\n");
+		TunnelSend("[notice]{\"type\":\"dbg_err\"}\n");
 		g_Base = NULL;
 	}
 
@@ -305,7 +305,7 @@ CreatePollTimer()
 
 
 // Sync connection timer callback, run after a 1s timeout
-VOID 
+VOID
 CALLBACK SyncTimerCb(PVOID lpParameter, BOOL TimerOrWaitFired)
 {
 	UNREFERENCED_PARAMETER(lpParameter);

@@ -239,7 +239,7 @@ UPDATE_FAILURE:
     // Inform the dispatcher that an error occured in the state update
     if (g_Base != NULL)
     {
-        TunnelSend("[notice]{\"type\":\"mod_err\"}\n");
+        TunnelSend("[notice]{\"type\":\"dbg_err\"}\n");
         dprintf("       hint: .reload command may help");
         g_Base = NULL;
     }
