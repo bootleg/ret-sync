@@ -859,10 +859,12 @@ Use commands, **without "!" prefix**
     lldb> cmt mooo
 ```
 
+
 ## OllyDbg 1.10 usage
 
 1. Use Plugins menu or shortcuts to enable (``Alt+s``)/disable (``Alt+u``)
    synchronization.
+
 
 ## OllyDbg2 usage
 
@@ -878,7 +880,21 @@ Due to the beta status of OllyDbg2 API, only the following features have been im
 
 ## x64dbg usage
 
-1. Use commands to enable ("``!sync"``) or disable ("``!syncoff``") synchronization.
+1. Use Plugins menu or commands enable ("``!sync"``) or disable ("``!syncoff``") synchronization.
+
+2. Use commands
+
+```
+[sync] synchelp command!
+[sync] extension commands help:
+ > !sync                          = synchronize with <host from conf> or the default value
+ > !syncoff                       = stop synchronization
+ > !synchelp                      = display this help
+ > !cmt <string>                  = add comment at current eip in IDA
+ > !rcmt <string>                 = reset comments at current eip in IDA
+ > !idblist                       = display list of all IDB clients connected to the dispatcher
+```
+
 
 # Extend
 

@@ -150,11 +150,7 @@ UpdateState()
 		}
 	}
 
-#if defined(_WIN64)
-	hRes = TunnelSend("[sync]{\"type\":\"loc\",\"base\":%llu,\"offset\":%llu}\n", g_Base, g_Offset);
-#else
-	hRes = TunnelSend("[sync]{\"type\":\"loc\",\"base\":%u,\"offset\":%u}\n", g_Base, g_Offset);
-#endif
+	hRes = TunnelSend("[sync]{\"type\":\"loc\",\"base\":%llu,\"offset\":%llu}\n", (ULONG64)g_Base, (ULONG64)g_Offset);
 
 	return hRes;
 
@@ -430,6 +426,22 @@ HRESULT syncoff()
 }
 
 
+HRESULT synchelp()
+{
+	HRESULT hRes = S_OK;
+
+	_plugin_logputs("[sync] extension commands help:\n"
+		" > !sync                          = synchronize with <host from conf> or the default value\n"
+		" > !syncoff                       = stop synchronization\n"
+		" > !synchelp                      = display this help\n"
+		" > !cmt <string>                  = add comment at current eip in IDA\n"
+		" > !rcmt <string>                 = reset comments at current eip in IDA\n"
+		" > !idblist                       = display list of all IDB clients connected to the dispatcher\n");
+
+	return hRes;
+}
+
+
 // idblist command implementation
 HRESULT idblist()
 {
@@ -459,6 +471,112 @@ HRESULT idblist()
 RESTORE_TIMER:
 	CreatePollTimer();
 	return hRes;
+}
+
+
+// add comment (cmt) command implementation
+HRESULT cmt(PSTR Args)
+{
+	HRESULT hRes = S_OK;
+	char* token = NULL;
+
+	if (!g_Synchronized) {
+		_plugin_logputs("[sync] not synced, !cmt command unavailable\n");
+		return E_FAIL;
+	}
+
+	if (!strtok_s(Args, " ", &token))
+	{
+		_plugin_logputs("[sync] failed to tokenize comment\n");
+		return E_FAIL;
+	}
+
+	hRes = TunnelSend("[sync]{\"type\":\"cmt\",\"msg\":\"%s\",\"base\":%llu,\"offset\":%llu}\n", token, (ULONG64)g_Base, (ULONG64)g_Offset);
+	if (FAILED(hRes))
+	{
+		_plugin_logputs("[sync] failed to send comment\n");
+	}
+
+	return hRes;
+}
+
+
+// reset comment (rcmt) command implementation
+HRESULT rcmt()
+{
+	HRESULT hRes = S_OK;
+
+	if (!g_Synchronized) {
+		_plugin_logputs("[sync] not synced, !cmt command unavailable\n");
+		return E_FAIL;
+	}
+
+	hRes = TunnelSend("[sync]{\"type\":\"rcmt\",\"msg\":\"%s\",\"base\":%llu,\"offset\":%llu}\n", "", (ULONG64)g_Base, (ULONG64)g_Offset);
+	if (FAILED(hRes))
+	{
+		_plugin_logputs("[sync] failed to reset comment\n");
+	}
+
+	return hRes;
+}
+
+
+static bool cbSyncCommand(int argc, char* argv[])
+{
+	_plugin_logputs("[sync] sync command!");
+	sync(NULL);
+	return true;
+}
+
+
+static bool cbSyncoffCommand(int argc, char* argv[])
+{
+	_plugin_logputs("[sync] syncoff command!");
+	syncoff();
+	return true;
+}
+
+
+static bool cbSynchelpCommand(int argc, char* argv[])
+{
+	_plugin_logputs("[sync] synchelp command!");
+	synchelp();
+	return true;
+}
+
+
+static bool cbIdblistCommand(int argc, char* argv[])
+{
+	_plugin_logputs("[sync] idblist command!");
+	idblist();
+	return true;
+}
+
+
+static bool cbCmtCommand(int argc, char* argv[])
+{
+#if VERBOSE >= 2
+	_plugin_logputs("[sync] cmt command!");
+#endif
+
+	if (strlen(argv[0]) == 4) {
+		_plugin_logputs("[sync] !cmt <comment to add>\n");
+		return false;
+	}
+
+	cmt((PSTR)argv[0]);
+	return true;
+}
+
+
+static bool cbRcmtCommand(int argc, char* argv[])
+{
+#if VERBOSE >= 2
+	_plugin_logputs("[sync] rcmt command!");
+#endif
+
+	rcmt();
+	return true;
 }
 
 
@@ -517,52 +635,23 @@ extern "C" __declspec(dllexport) void CBMENUENTRY(CBTYPE cbType, PLUG_CB_MENUENT
 	switch (info->hEntry)
 	{
 	case MENU_ENABLE_SYNC:
-	{
-		_plugin_logputs("[sync] enable sync");
-		sync(NULL);
-	}
-	break;
+		cbSyncCommand(0, NULL);
+		break;
 
 	case MENU_DISABLE_SYNC:
-	{
-		_plugin_logputs("[sync] disable sync");
-		syncoff();
-	}
-	break;
+		cbSyncoffCommand(0, NULL);
+		break;
 
 	case MENU_IDB_LIST:
-	{
-		_plugin_logputs("[sync] retrieve idb list");
-		idblist();
-	}
-	break;
+		cbIdblistCommand(0, NULL);
+		break;
+
+	case MENU_SYNC_HELP:
+		cbSynchelpCommand(0, NULL);
+		break;
 
 	break;
 	}
-}
-
-
-static bool cbSyncCommand(int argc, char* argv[])
-{
-	_plugin_logputs("[sync] sync command!");
-	sync(NULL);
-	return true;
-}
-
-
-static bool cbSyncoffCommand(int argc, char* argv[])
-{
-	_plugin_logputs("[sync] syncoff command!");
-	syncoff();
-	return true;
-}
-
-
-static bool cbIdblistCommand(int argc, char* argv[])
-{
-	_plugin_logputs("[sync] idblist command!");
-	idblist();
-	return true;
 }
 
 
@@ -579,8 +668,17 @@ void coreInit(PLUG_INITSTRUCT* initStruct)
 	if (!_plugin_registercommand(pluginHandle, "!syncoff", cbSyncoffCommand, true))
 		_plugin_logputs("[sync] error registering the \"!syncoff\" command!");
 
+	if (!_plugin_registercommand(pluginHandle, "!synchelp", cbSynchelpCommand, false))
+		_plugin_logputs("[sync] error registering the \"!synchelp\" command!");
+
 	if (!_plugin_registercommand(pluginHandle, "!idblist", cbIdblistCommand, true))
 		_plugin_logputs("[sync] error registering the \"!idblist\" command!");
+
+	if (!_plugin_registercommand(pluginHandle, "!cmt", cbCmtCommand, true))
+		_plugin_logputs("[sync] error registering the \"!cmt\" command!");
+
+	if (!_plugin_registercommand(pluginHandle, "!rcmt", cbRcmtCommand, true))
+		_plugin_logputs("[sync] error registering the \"!rcmt\" command!");
 
 	// initialize globals
 	g_Synchronized = FALSE;
@@ -611,7 +709,10 @@ void coreStop()
 	// unregister plugin's commands and menu entries
 	_plugin_unregistercommand(pluginHandle, "!sync");
 	_plugin_unregistercommand(pluginHandle, "!syncoff");
+	_plugin_unregistercommand(pluginHandle, "!synchelp");
 	_plugin_unregistercommand(pluginHandle, "!idblist");
+	_plugin_unregistercommand(pluginHandle, "!cmt");
+	_plugin_unregistercommand(pluginHandle, "!rcmt");
 	_plugin_menuclear(hMenu);
 }
 
@@ -621,4 +722,5 @@ void coreSetup()
 	_plugin_menuaddentry(hMenu, MENU_ENABLE_SYNC, "&Enable sync");
 	_plugin_menuaddentry(hMenu, MENU_DISABLE_SYNC, "&Disable sync");
 	_plugin_menuaddentry(hMenu, MENU_IDB_LIST, "&Retrieve idb list");
+	_plugin_menuaddentry(hMenu, MENU_SYNC_HELP, "&Display sync commands help");
 }

@@ -28,15 +28,21 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define TIMER_PERIOD 100
 #define CONF_FILE "\\.sync"
 
-//menu identifiers
-#define MENU_ENABLE_SYNC 0
-#define MENU_DISABLE_SYNC 1
-#define MENU_IDB_LIST 2
+enum MENU_IDENTIFIERS {
+	MENU_ENABLE_SYNC,
+	MENU_DISABLE_SYNC,
+	MENU_IDB_LIST,
+	MENU_SYNC_HELP
+};
 
 //functions
 HRESULT sync(PSTR Args);
 HRESULT syncoff();
+HRESULT synchelp();
 HRESULT idblist();
+HRESULT cmt(PSTR Args);
+HRESULT rcmt();
+
 void coreInit(PLUG_INITSTRUCT* initStruct);
 void coreStop();
 void coreSetup();
