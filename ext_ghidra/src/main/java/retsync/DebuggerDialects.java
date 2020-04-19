@@ -72,7 +72,7 @@ public class DebuggerDialects {
                     entry("si", "sti"),
                     entry("so", "sto"),
                     entry("go", "go"),
-                    entry("bp", "bb "),
+                    entry("bp", "bp "),
                     entry("hbp", "xxx "),
                     entry("bp1", "xxx "),
                     entry("hbp1", "xxx ")
