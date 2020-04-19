@@ -492,6 +492,8 @@ WinDbg specific commands:
 | Debugger command           | Description                                                                               |
 |----------------------------|-------------------------------------------------------------------------------------------|
 | `curmod`  |  Display module infomation for current instruction offset (for troubleshooting) |
+| `modlist`  |  Debugger Markup Language (DML) enhanced module list meant for smoother active idb switching  |
+| `idb <module name>`  |  Set given module as the active idb (see `modlist` enhanced version of `lm`) |
 | `modmap <base> <size> <name>` |  A synthetic ("faked") module (defined using its base address and size) is added to the debugger internal list  |
 | `modunmap <base>` |  Remove a previously mapped synthetic module at base address  |
 | `modcheck <\|\|md5>`  |  Use to check if current module really matches IDB's file (ex: module has been updated)  |

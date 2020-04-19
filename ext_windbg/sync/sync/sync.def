@@ -40,7 +40,9 @@ EXPORTS
     bc
     idblist
     idbn
+    idb
     jmpto
+    modlist
     modmap
     modunmap
     modcheck

@@ -240,7 +240,11 @@ UPDATE_FAILURE:
     if (g_Base != NULL)
     {
         TunnelSend("[notice]{\"type\":\"dbg_err\"}\n");
-        dprintf("       hint: .reload command may help");
+        g_ExtControl->ControlledOutput(
+            DEBUG_OUTCTL_AMBIENT_DML,
+            DEBUG_OUTPUT_NORMAL,
+            "<?dml?>       hint: <exec cmd=\".reload\">.reload</exec> command may help\n");
+
         g_Base = NULL;
     }
 
@@ -314,9 +318,9 @@ PollCmd()
     char *msg, *next, *orig = NULL;
 
     hRes = TunnelPoll(&NbBytesRecvd, &msg);
-    if (SUCCEEDED(hRes) & (NbBytesRecvd > 0) & (msg != NULL))
+    if (SUCCEEDED(hRes) && (NbBytesRecvd > 0) && (msg != NULL))
     {
-        next = orig = msg;
+        orig = msg;
 
         while ((msg - orig) < NbBytesRecvd)
         {
@@ -614,7 +618,6 @@ sync(PDEBUG_CLIENT4 Client, PCSTR Args)
     HRESULT hRes = S_OK;
     PCSTR Host;
     PSTR pszId = NULL;
-
     INIT_API();
 
     // Reset global state
@@ -879,6 +882,9 @@ ExecCmdList(PCSTR cmd)
 
         // msdn: Executes the specified debugger commands.
         hRes = g_ExtControl->Execute(DEBUG_OUTCTL_ALL_CLIENTS, cmd, DEBUG_EXECUTE_ECHO | DEBUG_EXECUTE_NO_REPEAT);
+        if (FAILED(hRes)) {
+            break;
+        }
 
         // msdn: Describes the nature of the current target.
         hRes = g_ExtControl->GetExecutionStatus(&Status);
@@ -1043,11 +1049,13 @@ CALLBACK
 idblist(PDEBUG_CLIENT4 Client, PCSTR Args)
 {
     HRESULT hRes = S_OK;
+    int NbBytesRecvd = 0;
+    int i = 0;
+    char* msg = NULL;
+    char* ctx = NULL;
+    char* mod = NULL;
     UNREFERENCED_PARAMETER(Args);
     INIT_API();
-
-    int NbBytesRecvd;
-    char * msg = NULL;
 
 #if VERBOSE >= 2
     dprintf("[sync] !idblist called\n");
@@ -1062,8 +1070,24 @@ idblist(PDEBUG_CLIENT4 Client, PCSTR Args)
     }
 
     hRes = TunnelReceive(&NbBytesRecvd, &msg);
-    if (SUCCEEDED(hRes) & (NbBytesRecvd > 0) & (msg != NULL)){
-        dprintf("%s\n", msg);
+    if (SUCCEEDED(hRes) && (NbBytesRecvd > 0) && (msg != NULL))
+    {
+        strtok_s(msg, "\n", &ctx);
+
+        while (strtok_s(NULL, "]", &ctx) != NULL)
+        {
+            mod = strtok_s(NULL, "\n", &ctx);
+            while (isspace(*mod))
+                mod++;
+
+            hRes = g_ExtControl->ControlledOutput(
+                DEBUG_OUTCTL_AMBIENT_DML,
+                DEBUG_OUTPUT_NORMAL,
+                "<?dml?>    [%d] <exec cmd=\"!idbn %d\">%s</exec>\n",
+                i, i, mod);
+            i++;
+        }
+
         free(msg);
     }
 
@@ -1074,12 +1098,85 @@ TIMER_REARM_EXIT:
 
 
 HRESULT
+GetModuleByImageName(CHAR* ImageName, PULONG64 pModuleBase, PCHAR* pModuleName)
+{
+    HRESULT hRes = S_OK;
+    ULONG Loaded, Unloaded;
+    ULONG ImageNameSize = 0;
+    ULONG LoadedImageNameSize = 0;
+    ULONG ModuleNameSize = 0;
+    ULONG64 Base = 0;
+    CHAR ImageNameBuffer[MAX_NAME] = { 0 };
+    CHAR ModuleNameBuffer[MAX_NAME] = { 0 };
+    CHAR LoadedImageNameBuffer[MAX_NAME] = { 0 };
+    unsigned int i = 0;
+
+    hRes = g_ExtSymbols->GetNumberModules(&Loaded, &Unloaded);
+    if (FAILED(hRes)) {
+        dprintf("[sync] GetNumberModules failed\n");
+        return hRes;
+    }
+
+    for (i = 0; i < Loaded; i++)
+    {
+        hRes = g_ExtSymbols->GetModuleByIndex(i, &Base);
+        if (FAILED(hRes)) {
+            dprintf("[sync] GetModuleByIndex failed\n");
+            return hRes;
+        }
+
+        /*
+        msdn: GetModuleNames method returns the names of the specified module.
+        */
+        hRes = g_ExtSymbols->GetModuleNames(
+            DEBUG_ANY_ID,
+            Base,
+            ImageNameBuffer, MAX_NAME, &ImageNameSize,
+            ModuleNameBuffer, MAX_NAME, &ModuleNameSize,
+            LoadedImageNameBuffer, MAX_NAME, &LoadedImageNameSize
+        );
+
+        if (FAILED(hRes)) {
+            dprintf("[sync] GetModuleNames failed\n");
+            return hRes;
+        }
+
+        if (strncmp(ImageName, ImageNameBuffer, ImageNameSize))
+        {
+            if (pModuleBase != NULL)
+            {
+                hRes = g_ExtSymbols->GetModuleByIndex(i, pModuleBase);
+                if (FAILED(hRes)) {
+                    dprintf("[sync] GetModuleByIndex failed\n");
+                    *pModuleBase = NULL;
+                    return hRes;
+                }
+            }
+
+            if (pModuleName != NULL)
+            {
+                *pModuleName = (PCHAR)malloc(ModuleNameSize);
+                strncpy_s(*pModuleName, ModuleNameSize, ModuleNameBuffer, _TRUNCATE);
+            }
+
+            break;
+        }
+    }
+
+    return hRes;
+}
+
+HRESULT
 CALLBACK
 idbn(PDEBUG_CLIENT4 Client, PCSTR Args)
 {
     HRESULT hRes = S_OK;
-    int NbBytesRecvd;
-    char * msg = NULL;
+    ULONG64 Base = 0;
+    int NbBytesRecvd = 0;
+    char* msg = NULL;
+    char* img_name = NULL;
+    char* mod_name = NULL;
+    char* context = NULL;
     INIT_API();
 
     if (!Args || !*Args) {
@@ -1087,26 +1184,195 @@ idbn(PDEBUG_CLIENT4 Client, PCSTR Args)
         return E_FAIL;
     }
 
-#if VERBOSE >= 2
-    dprintf("[sync] !idbn called\n");
-#endif
+    // strip trailing whitespaces
+    strtok_s((char*)Args, " ", &context);
 
     ReleasePollTimer();
 
     hRes = TunnelSend("[notice]{\"type\":\"idb_n\",\"idb\":\"%s\"}\n", Args);
     if (FAILED(hRes)){
-        dprintf("[sync] !idblist failed\n");
-        goto TIMER_REARM_EXIT;
+        dprintf("[sync] !idbn failed to send notice\n");
+        return E_FAIL;
     }
 
     hRes = TunnelReceive(&NbBytesRecvd, &msg);
-    if (SUCCEEDED(hRes) & (NbBytesRecvd > 0) & (msg != NULL)){
+    if (FAILED(hRes))
+        goto DBG_ERROR;
+
+    // check if dispatcher answered with an error message
+    // e.g. "> idb_n error: index %d is invalid (see idblist)"
+    if (strstr(msg, "> idb_n error:") != NULL)
+    {
         dprintf("%s\n", msg);
-        free(msg);
+        goto DBG_ERROR;
     }
+
+    strtok_s(msg, "\"", &context);
+    img_name = strtok_s(NULL, "\"", &context);
+    if (img_name == NULL)
+    {
+        dprintf("[sync] idb_n notice: invalid answser - could not extract image name\n");
+        goto DBG_ERROR;
+    }
+
+    hRes = GetModuleByImageName(img_name, &Base, &mod_name);
+    if (FAILED(hRes)) {
+        dprintf("[sync] GetModuleByImageName failed\n");
+        goto DBG_ERROR;
+    }
+
+    hRes = g_ExtControl->ControlledOutput(
+         DEBUG_OUTCTL_AMBIENT_DML,
+         DEBUG_OUTPUT_NORMAL,
+         "<?dml?>> active idb is now \"<exec cmd=\"lmvm %s\">%s</exec>\" (%s)\n", mod_name, img_name, Args);
+
+    if (mod_name != NULL)
+        free(mod_name);
+
+    if (FAILED(hRes)) {
+        dprintf("[sync] ControlledOutput failed\n");
+        goto DBG_ERROR;
+    }
+
+    // Send this module its remote base address
+    hRes = TunnelSend("[sync]{\"type\":\"rbase\",\"rbase\":%llu}\n", Base);
+    if (FAILED(hRes)) {
+        goto DBG_ERROR;
+    }
+
+    goto TIMER_REARM_EXIT;
+
+DBG_ERROR:
+    // send dbg_err notice to disable the idb as its remote address base
+    // was not properly resolved
+    TunnelSend("[notice]{\"type\":\"dbg_err\"}\n");
 
 TIMER_REARM_EXIT:
     CreatePollTimer();
+
+    if (msg != NULL)
+        free(msg);
+
+    return hRes;
+}
+
+
+HRESULT
+CALLBACK
+idb(PDEBUG_CLIENT4 Client, PCSTR Args)
+{
+    HRESULT hRes = S_OK;
+    ULONG64 Base = 0;
+    ULONG ImageNameSize = 0;
+    ULONG LoadedImageNameSize = 0;
+    CHAR ImageNameBuffer[MAX_NAME] = { 0 };
+    CHAR LoadedImageNameBuffer[MAX_NAME] = { 0 };
+    CHAR *ModuleName = NULL;
+    CHAR *Context = NULL;
+    INIT_API();
+
+    if (!Args || !*Args) {
+        dprintf("[sync] !idb <module name>\n");
+        return E_FAIL;
+    }
+
+    // strip trailing whitespaces
+    strtok_s((char *)Args, " ", &Context);
+
+    g_ExtControl->ControlledOutput(
+        DEBUG_OUTCTL_AMBIENT_DML,
+        DEBUG_OUTPUT_NORMAL,
+        "<?dml?>> mod: \"<exec cmd=\"lmvm %s\">%s</exec>\"\n", Args, Args);
+
+    /*
+    msdn:  GetModuleByModuleName2 method searches through the process's modules for one with the specified name.
+    */
+    hRes = g_ExtSymbols->GetModuleByModuleName2(Args, 0, DEBUG_GETMOD_NO_UNLOADED_MODULES, NULL, &Base);
+    if (FAILED(hRes)) {
+        dprintf("[sync] GetModuleByModuleName2 failed for module: %s\n", Args);
+        return hRes;
+    }
+
+    dprintf("> base address: 0x%x\n", Base);
+
+    /*
+    msdn: GetModuleNames method returns the names of the specified module.
+    */
+    hRes = g_ExtSymbols->GetModuleNames(
+        DEBUG_ANY_ID,
+        Base,
+        ImageNameBuffer, MAX_NAME, &ImageNameSize,
+        NULL, 0, NULL,
+        LoadedImageNameBuffer, MAX_NAME, &LoadedImageNameSize);
+    if (FAILED(hRes)) {
+        dprintf("[sync] GetModuleNames failed for module at 0x%x\n", Base);
+        return hRes;
+    }
+
+    // Ask dispatcher to enable the resolved module
+    ModuleName = (LoadedImageNameSize > 1) ? LoadedImageNameBuffer : ImageNameBuffer;
+    hRes = TunnelSend("[notice]{\"type\":\"module\",\"path\":\"%s\"}\n", ModuleName);
+    if (FAILED(hRes)) {
+        dprintf("[sync] TunnelSend failed for module notice\n");
+        return hRes;
+    }
+
+    // Send this module its remote base address
+    hRes = TunnelSend("[sync]{\"type\":\"rbase\",\"rbase\":%llu}\n", Base);
+    if (FAILED(hRes)) {
+        dprintf("[sync] TunnelSend failed for rbase message\n");
+        return hRes;
+    }
+
+    return hRes;
+}
+
+
+HRESULT
+CALLBACK
+modlist(PDEBUG_CLIENT4 Client, PCSTR Args)
+{
+    HRESULT hRes = S_OK;
+    char* cmd = NULL;
+    char* token_start = NULL;
+    char* token_end = NULL;
+    char* token_mod = NULL;
+    char* token_nextline = NULL;
+    char* token_index = NULL;
+    UNREFERENCED_PARAMETER(Args);
+    INIT_API();
+
+    hRes = LocalCmd(Client, "!for_each_module .echo @#ModuleIndex @#Base @#End @#ModuleName @#ImageName @#LoadedImageName");
+    if (FAILED(hRes) || FAILED(g_CmdBuffer.hRes) || (g_CmdBuffer.len == 0))
+    {
+        dprintf("[sync] failed to evaluate for_each_module one-liner, %x, %x\n", hRes, g_CmdBuffer.hRes);
+        goto EXIT;
+    }
+
+    cmd = (char*)(g_CmdBuffer.buffer);
+
+    // parse lines
+    while (cmd != NULL)
+    {
+        token_index = strtok_s(NULL, " ", &cmd);
+        if (token_index == NULL)
+            break;
+
+        token_start = strtok_s(NULL, " ", &cmd);
+        token_end = strtok_s(NULL, " ", &cmd);
+        token_mod = strtok_s(NULL, " ", &cmd);
+        token_nextline = strtok_s(NULL, "\n", &cmd);
+
+        hRes = g_ExtControl->ControlledOutput(
+            DEBUG_OUTCTL_AMBIENT_DML,
+            DEBUG_OUTPUT_NORMAL,
+            "<?dml?>%s : %s %s <exec cmd=\"!idb %s\">%-24s</exec>  %s\n",
+            token_index, token_start, token_end, token_mod, token_mod, token_nextline);
+    }
+
+EXIT:
+    g_CmdBuffer.len = 0;
+    ZeroMemory(g_CmdBuffer.buffer, MAX_CMD);
     return hRes;
 }
 
@@ -1190,7 +1456,7 @@ raddr(PDEBUG_CLIENT4 Client, PCSTR Args)
 {
     HRESULT hRes;
     ULONG64 Base, Offset = 0;
-    ULONG RemainderIndex;
+    ULONG RemainderIndex = 0;
     DEBUG_VALUE DebugValue = {};
     INIT_API();
 
@@ -1239,7 +1505,7 @@ rln(PDEBUG_CLIENT4 Client, PCSTR Args)
     ULONG RemainderIndex;
     DEBUG_VALUE DebugValue = {};
     char *msg = NULL;
-    int NbBytesRecvd;
+    int NbBytesRecvd = 0;
     INIT_API();
 
     if (!Args || !*Args)
@@ -1276,6 +1542,11 @@ rln(PDEBUG_CLIENT4 Client, PCSTR Args)
 
     hRes = TunnelSend("[sync]{\"type\":\"rln\",\"raddr\":%llu,\"rbase\":%llu,\"base\":%llu,\"offset\":%llu}\n",
         Offset, Base, g_Base, g_Offset);
+    if (FAILED(hRes))
+    {
+        dprintf("[sync] rln TunnelSend failed\n");
+        goto Exit;
+    }
 
     // Let time for the IDB client to reply if it exists
     Sleep(150);
@@ -1369,7 +1640,6 @@ modmap(PDEBUG_CLIENT4 Client, PCSTR Args)
     ULONG64 ModBase = 0;
     ULONG ModSize;
     ULONG RemainderIndex;
-
     DEBUG_VALUE DebugValue = {};
     INIT_API();
 
@@ -1429,6 +1699,10 @@ modmap(PDEBUG_CLIENT4 Client, PCSTR Args)
     {
         dprintf("[sync] modmap: AddSyntheticSymbol failed\n");
         hRes = g_ExtSymbols->RemoveSyntheticModule(ModBase);
+        if (FAILED(hRes))
+        {
+            dprintf("[sync] modmap: RemoveSyntheticModule failed\n");
+        }
         return E_FAIL;
     }
 
@@ -1440,7 +1714,7 @@ HRESULT
 CALLBACK
 modunmap(PDEBUG_CLIENT4 Client, PCSTR Args)
 {
-    HRESULT hRes;
+    HRESULT hRes = S_OK;
     ULONG64 ModBase = 0;
     ULONG RemainderIndex;
     DEBUG_VALUE DebugValue = {};
@@ -1640,7 +1914,7 @@ modmd5(LPSTR *hexhash)
         goto Exit;
     }
 
-    while (bResult = ReadFile(hFile, buffer, BUFSIZE, &cbRead, NULL))
+    while ((bResult = ReadFile(hFile, buffer, BUFSIZE, &cbRead, NULL)))
     {
         if (cbRead == 0){
             break;
@@ -1709,7 +1983,6 @@ modcheck(PDEBUG_CLIENT4 Client, PCSTR Args)
     CHAR *type;
     CHAR cmd[64] = { 0 };
     BOOL bUsePdb = TRUE;
-
     INIT_API();
 
     if (!g_Synchronized)
@@ -1921,6 +2194,7 @@ ks(PDEBUG_CLIENT4 Client, PCSTR Args)
     ULONG ProcType;
     char *cmd, *ptr, *end;
     UNREFERENCED_PARAMETER(Args);
+    INIT_API();
 
     hRes = LocalCmd(Client, ".prefer_dml");
     if (FAILED(hRes) || FAILED(g_CmdBuffer.hRes))
@@ -2096,6 +2370,7 @@ synchelp(PDEBUG_CLIENT4 Client, PCSTR Args)
         "                                    color a single instruction at current eip if called without argument\n"
         "                                    'set' is used with an hex rgb code (ex: 0xFFFFFF)\n"
         " > !idblist                       = display list of all IDB clients connected to the dispatcher\n"
+        " > !idb <module name>             = set given module as the active idb (see !modlist)\n"
         " > !idbn <n>                      = set active idb to the n_th client. n should be a valid decimal value\n"
         " > !syncmodauto <on|off>          = enable/disable idb auto switch based on module name\n"
         " > !jmpto <expression>            = evaluate expression and sync IDA with result address\n"
@@ -2103,6 +2378,7 @@ synchelp(PDEBUG_CLIENT4 Client, PCSTR Args)
         " > !jmpraw <expression>           = evaluate expression and sync IDA with result address\n"
         "                                    (use current idb, no idb switch or address rebase)\n"
         " > !curmod                        = display module infomation for current instruction offset (for troubleshooting)\n"
+        " > !modlist                       = DML enhanced module list smoothing active idb switching\n"
         " > !modcheck <||md5>              = check current module pdb info or md5 with respect to idb's input file\n"
         " > !modmap <base> <size> <name>   = map a synthetic module over memory range specified by base and size params\n"
         " > !modunmap <base>               = unmap a synthetic module at base address\n"
