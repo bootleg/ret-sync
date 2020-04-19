@@ -109,8 +109,8 @@ class BrokerSrv():
         args = [arg.replace('\"', '') for arg in list(tokenizer)]
         try:
             proc = subprocess.Popen(args, shell=False,
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
+                                    stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL)
             pid = proc.pid
         except (OSError, ValueError):
             pid = None
@@ -289,9 +289,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--idb', nargs=1, action='store')
-    args = parser.parse_args()
 
     with error_reporting('server.arg', 'missing idb argument'):
+        args = parser.parse_args()
         server.name = args.idb[0]
 
     with error_reporting('server.config'):
