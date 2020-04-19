@@ -499,7 +499,7 @@ HRESULT cmt(PSTR Args)
 
 	cip = GetContextData(UE_CIP);
 
-	res = _snprintf_s(g_CommandBuffer, _countof(g_CommandBuffer), _TRUNCATE, "commentset 0x%x, \"%s\"", cip, token);
+	res = _snprintf_s(g_CommandBuffer, _countof(g_CommandBuffer), _TRUNCATE, "commentset %Ix, \"%s\"", cip, token);
 	if (res == _TRUNCATE) {
 		_plugin_logprintf("[sync] truncation occured in commentset command generation\n", g_CommandBuffer);
 	}
@@ -536,7 +536,7 @@ HRESULT rcmt()
 
 	cip = GetContextData(UE_CIP);
 
-	res = _snprintf_s(g_CommandBuffer, _countof(g_CommandBuffer), _TRUNCATE, "commentdel 0x%x", cip);
+	res = _snprintf_s(g_CommandBuffer, _countof(g_CommandBuffer), _TRUNCATE, "commentdel %Ix", cip);
 	if (res == _TRUNCATE) {
 		_plugin_logputs("[sync] truncation occured in commentdel command generation\n");
 	}
