@@ -29,8 +29,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
 // Default host value is locahost
-static CHAR *g_DefaultHost = "127.0.0.1";
-static CHAR *g_DefaultPort = "9100";
+static const CHAR *g_DefaultHost = "127.0.0.1";
+static const CHAR *g_DefaultPort = "9100";
 
 // Command polling feature
 static HANDLE g_hPollTimer = INVALID_HANDLE_VALUE;
@@ -47,6 +47,9 @@ static BOOL g_SyncAuto = true;
 
 // Buffer used to solve symbol's name
 static CHAR g_NameBuffer[MAX_MODULE_SIZE];
+
+// Buffer used generate commands
+static CHAR g_CommandBuffer[MAX_COMMAND_LINE_SIZE];
 
 
 HRESULT
@@ -477,7 +480,10 @@ RESTORE_TIMER:
 // add comment (cmt) command implementation
 HRESULT cmt(PSTR Args)
 {
+	BOOL bRes = FALSE;
 	HRESULT hRes = S_OK;
+	int res = 0;
+	ULONG_PTR cip = NULL;
 	char* token = NULL;
 
 	if (!g_Synchronized) {
@@ -489,6 +495,20 @@ HRESULT cmt(PSTR Args)
 	{
 		_plugin_logputs("[sync] failed to tokenize comment\n");
 		return E_FAIL;
+	}
+
+	cip = GetContextData(UE_CIP);
+
+	res = _snprintf_s(g_CommandBuffer, _countof(g_CommandBuffer), _TRUNCATE, "commentset 0x%x, \"%s\"", cip, token);
+	if (res == _TRUNCATE) {
+		_plugin_logprintf("[sync] truncation occured in commentset command generation\n", g_CommandBuffer);
+	}
+	else
+	{
+		bRes = DbgCmdExec(g_CommandBuffer);
+		if (!bRes) {
+			_plugin_logprintf("[sync] failed to execute \"%s\" command\n", g_CommandBuffer);
+		}
 	}
 
 	hRes = TunnelSend("[sync]{\"type\":\"cmt\",\"msg\":\"%s\",\"base\":%llu,\"offset\":%llu}\n", token, (ULONG64)g_Base, (ULONG64)g_Offset);
@@ -505,10 +525,27 @@ HRESULT cmt(PSTR Args)
 HRESULT rcmt()
 {
 	HRESULT hRes = S_OK;
+	BOOL bRes = FALSE;
+	int res = 0;
+	ULONG_PTR cip = NULL;
 
 	if (!g_Synchronized) {
 		_plugin_logputs("[sync] not synced, !cmt command unavailable\n");
 		return E_FAIL;
+	}
+
+	cip = GetContextData(UE_CIP);
+
+	res = _snprintf_s(g_CommandBuffer, _countof(g_CommandBuffer), _TRUNCATE, "commentdel 0x%x", cip);
+	if (res == _TRUNCATE) {
+		_plugin_logputs("[sync] truncation occured in commentdel command generation\n");
+	}
+	else
+	{
+		bRes = DbgCmdExec(g_CommandBuffer);
+		if (!bRes) {
+			_plugin_logprintf("[sync] failed to execute \"%s\" command\n", g_CommandBuffer);
+		}
 	}
 
 	hRes = TunnelSend("[sync]{\"type\":\"rcmt\",\"msg\":\"%s\",\"base\":%llu,\"offset\":%llu}\n", "", (ULONG64)g_Base, (ULONG64)g_Offset);
