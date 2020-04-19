@@ -25,6 +25,7 @@
 import os
 import os.path as altpath
 import sys
+import time
 import socket
 import select
 import re
@@ -212,15 +213,15 @@ class DispatcherSrv():
         try:
             hash = json.loads(req)
         except ValueError:
-            print("[-] dispatcher failed to parse json\n %s\n" % req)
+            self.broadcast("dispatcher failed to parse json\n %s\n" % req)
             return
 
-        type = hash['type']
-        if type not in self.req_handlers:
-            print("[*] dispatcher unknown request: %s" % type)
+        ntype = hash['type']
+        if ntype not in self.req_handlers:
+            self.broadcast("dispatcher unknown request: %s" % ntype)
             return
 
-        req_handler = self.req_handlers[type]
+        req_handler = self.req_handlers[ntype]
         req_handler(s, hash)
 
     def normalize(self, req, taglen):
@@ -237,7 +238,7 @@ class DispatcherSrv():
             s = self.current_idb.client_sock
 
         try:
-            announce = "[notice]{\"type\":\"dispatcher\",\"subtype\":\"announce\",\"msg\":\"%s\"}\n" % msg
+            announce = "[notice]{\"type\":\"dispatcher\",\"subtype\":\"msg\",\"msg\":\"%s\"}\n" % msg
             s.sendall(rs_encode(announce))
         except socket.error:
             return
@@ -344,14 +345,14 @@ class DispatcherSrv():
         if self.current_dbg:
             self.dbg_quit()
 
-        # promote to dbg client
+        # promote to debugger client
         self.current_dbg = self.sock_to_client(s)
         self.current_dbg.client_sock = s
         self.idb_clients.remove(self.current_dbg)
 
         self.broadcast("new debugger client: %s" % msg)
 
-        # store dbb's dialect
+        # store debugger's dialect
         if 'dialect' in hash:
             self.current_dialect = hash['dialect']
 
@@ -409,19 +410,19 @@ class DispatcherSrv():
         idb = hash['idb']
         try:
             idbn = int(idb)
-        except (TypeError, ValueError):
-            s.sendall('> n should be a decimal rs_encode(value)')
+        except (TypeError, ValueError) as e:
+            s.sendall(rs_encode('> idb_n error: n should be a decimal value'))
             return
 
         try:
             idbc = self.idb_clients[idbn]
         except IndexError:
-            msg = "> %d is invalid (see idblist)" % idbn
+            msg = "> idb_n error: index %d is invalid (see idblist)" % idbn
             s.sendall(rs_encode(msg))
             return
 
         self.switch_idb(idbc)
-        msg = "> current idb set to %d" % idbn
+        msg = "> active idb is now \"%s\" (%d)" % (idbc.name, idbn)
         s.sendall(rs_encode(msg))
 
     # dbg notice that its current module has changed
@@ -473,7 +474,8 @@ class DispatcherSrv():
     def err_log(self, msg):
         rs_log.exception(msg, exc_info=True)
         try:
-            self.announcement('dispatcher stopped')
+            self.broadcast('dispatcher stopped')
+            time.sleep(0.2)
             [sckt.close() for sckt in self.srv_socks]
         except Exception:
             pass
