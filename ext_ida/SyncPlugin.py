@@ -221,6 +221,11 @@ class RequestHandler(object):
         if self.hexsync.enabled:
             self.hexsync.cb_loc(ea)
 
+    # set remote base on purpose
+    def req_rbase(self, hash):
+        rbase = hash['rbase']
+        self.base_remote = rbase
+
     # log command output request at addr
     def req_cmd(self, hash):
         msg_b64, offset, base = hash['msg'], hash['offset'], hash['base']
@@ -783,6 +788,7 @@ class RequestHandler(object):
             'rcmt': self.req_rcmt,
             'fcmt': self.req_fcmt,
             'raddr': self.req_raddr,
+            'rbase': self.req_rbase,
             'cursor': self.req_cursor,
             'patch': self.req_patch,
             'rln': self.req_rln,
@@ -972,6 +978,10 @@ class SyncForm_t(PluginForm):
     def init_broker(self):
         rs_debug("init_broker")
         modname = self.input.text()
+        if modname == "":
+            modname = self.handle_name_aliasing()
+            self.input.setText(modname)
+
         cmdline = "\"%s\" -u \"%s\" --idb \"%s\"" % (
                   PYTHON_PATH,
                   BROKER_PATH,
