@@ -1044,6 +1044,26 @@ bc(PDEBUG_CLIENT4 Client, PCSTR Args)
 }
 
 
+char* trim_entry(char* line)
+{
+    char* backward = NULL;
+
+    // trim leading whitespace
+    while (isspace(*line))
+        line++;
+
+    strtok_s(line, "(", &backward);
+    backward = line + strlen(line);
+
+    // trim trailing whitespace
+    while (isspace(backward[-1]))
+        backward--;
+
+    *backward = '\0';
+    return line;
+}
+
+
 HRESULT
 CALLBACK
 idblist(PDEBUG_CLIENT4 Client, PCSTR Args)
@@ -1077,14 +1097,15 @@ idblist(PDEBUG_CLIENT4 Client, PCSTR Args)
         while (strtok_s(NULL, "]", &ctx) != NULL)
         {
             mod = strtok_s(NULL, "\n", &ctx);
-            while (isspace(*mod))
-                mod++;
+            if (mod == NULL)
+                break;
 
             hRes = g_ExtControl->ControlledOutput(
                 DEBUG_OUTCTL_AMBIENT_DML,
                 DEBUG_OUTPUT_NORMAL,
                 "<?dml?>    [%d] <exec cmd=\"!idbn %d\">%s</exec>\n",
-                i, i, mod);
+                i, i, trim_entry(mod));
+
             i++;
         }
 
