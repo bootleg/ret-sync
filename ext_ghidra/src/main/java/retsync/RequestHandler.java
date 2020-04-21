@@ -165,6 +165,12 @@ public class RequestHandler {
                 curClient = null;
                 break;
 
+                // debugger encountered an error
+            case "dbg_err":
+                rsplugin.clrs.cbColorFinal();
+                rsplugin.syncEnabled = false;
+                break;
+
                 // debugger notice that its current module has changed
             case "module":
                 rsplugin.syncEnabled = false;
@@ -275,17 +281,17 @@ public class RequestHandler {
                 try {
                     idbn = Integer.decode(notice.getString("idb"));
                 } catch (NumberFormatException e) {
-                    curClient.out.println("[x] idbn: failed to parse index");
+                    curClient.out.println(String.format("> idb_n error: n should be a decimal value"));
                     break;
                 }
 
                 if (Integer.compareUnsigned(idbn, pgmList.length) >= 0) {
-                    curClient.out.println("[x] idbn: invalid index");
+                    curClient.out.println(String.format("> idb_n error: index %d is invalid (see idblist)", idbn));
                     break;
                 }
 
                 rsplugin.setActiveProgram(pgmList[idbn]);
-                curClient.out.println(String.format("> current program is now: %s", rsplugin.program.getName()));
+                curClient.out.println(String.format("> active program is now \"%s\" (%d)", rsplugin.program.getName(), idbn));
                 break;
 
                 // color trace request
@@ -330,16 +336,21 @@ public class RequestHandler {
     }
 
     public class SyncHandler {
+        private String type = "";
+        private Long base = 0L;
+        private Long offset = 0L;
+        private Long raddr = 0L;
+        private Long rbase = 0L;
 
         public SyncHandler() {
+
         }
 
         public boolean parse(JSONObject sync) {
             boolean bExit = false;
-            String type = sync.getString("type");
-
-            Long base = sync.optLong("base");
-            Long offset = sync.optLong("offset");
+            type = sync.getString("type");
+            base = sync.optLong("base");
+            offset = sync.optLong("offset");
 
             switch (type) {
             // location request, update program's listing/graph view
@@ -357,6 +368,13 @@ public class RequestHandler {
 
                 rsplugin.gotoLoc(base, offset);
                 rsplugin.clrs.cbColorPost();
+                break;
+
+                // force remote address base for current program
+
+            case "rbase":
+                rbase = sync.getLong("rbase");
+                rsplugin.setRemoteBase(rbase);
                 break;
 
                 // add comment request at addr
@@ -385,10 +403,10 @@ public class RequestHandler {
 
                 // return program's symbol for a given addr
             case "rln":
-                Long ln_rbase = sync.getLong("rbase");
-                Long ln_raddr = sync.getLong("raddr");
+                rbase = sync.getLong("rbase");
+                raddr = sync.getLong("raddr");
 
-                String sym = rsplugin.getSymAt(ln_rbase, ln_raddr);
+                String sym = rsplugin.getSymAt(rbase, raddr);
                 if (sym != null) {
                     rsplugin.reqHandler.curClient.sendRaw(sym);
                 }
@@ -415,8 +433,8 @@ public class RequestHandler {
 
                 // add an address comment request at address
             case "raddr":
-                Long rbase = sync.getLong("rbase");
-                Long raddr = sync.getLong("raddr");
+                rbase = sync.getLong("rbase");
+                raddr = sync.getLong("raddr");
 
                 if (rsplugin.cmpRemoteBase(rbase) == 0) {
                     Address target = rsplugin.rebase(rbase, raddr);

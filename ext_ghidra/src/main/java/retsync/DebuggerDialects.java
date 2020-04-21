@@ -68,14 +68,15 @@ public class DebuggerDialects {
 
     private static final HashMap<String, String> X64DBG_DIALECT = new HashMap<String, String>(
             Map.ofEntries(
-                    entry("prefix", ""),
+                    entry("prefix", "!"),
                     entry("si", "sti"),
                     entry("so", "sto"),
                     entry("go", "go"),
                     entry("bp", "bp "),
-                    entry("hbp", "xxx "),
-                    entry("bp1", "xxx "),
-                    entry("hbp1", "xxx ")
+                    entry("hbp", "bph "),
+                    entry("bp1", "bp "),
+                    entry("hbp1", "bph "),
+                    entry("oneshot_post", ",ss")
                     ));
 
     public static final HashMap<String, HashMap<String, String>> DIALECTS = new  HashMap<String, HashMap<String, String>>(

@@ -332,6 +332,10 @@ public class RetSyncPlugin extends ProgramPlugin {
         moduleBaseRemote = bases;
     }
 
+    void setRemoteBase(long rbase) {
+        imageBaseRemote = imageBaseLocal.getNewAddress(rbase);
+    }
+
     boolean isRemoteBaseKnown() {
         return imageBaseRemote != null;
     }

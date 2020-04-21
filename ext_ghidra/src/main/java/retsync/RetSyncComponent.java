@@ -143,7 +143,8 @@ public class RetSyncComponent extends ComponentProvider {
         return action;
     }
 
-    private CodeViewerContextAction breakPointActionFactory(String name, String cmd, KeyBindingData keyBinding) {
+    private CodeViewerContextAction breakPointActionFactory(String name, String cmd, boolean oneshot,
+            KeyBindingData keyBinding) {
         CodeViewerContextAction breakpoint_action;
         breakpoint_action = new CodeViewerContextAction(name, getName()) {
             @Override
@@ -156,11 +157,12 @@ public class RetSyncComponent extends ComponentProvider {
 
                     if (rsplugin.isRemoteBaseKnown()) {
                         Address dest = rsplugin.rebaseRemote(loc.getAddress());
-                        rsplugin.reqHandler.curClient.sendCmd(cmd, String.format("0x%x", dest.getOffset()));
-                        rsplugin.cs.println(String.format("    local addr: %s, remote: 0x%x", loc.getAddress().toString(),
-                                dest.getOffset()));
+                        rsplugin.reqHandler.curClient.sendCmd(cmd, String.format("0x%x", dest.getOffset()), oneshot);
+                        rsplugin.cs.println(String.format("    local addr: %s, remote: 0x%x",
+                                loc.getAddress().toString(), dest.getOffset()));
                     } else {
-                        rsplugin.cs.println(String.format("[x] %s failed, remote base of %s program unknown", cmd, pgm.getName()));
+                        rsplugin.cs.println(
+                                String.format("[x] %s failed, remote base of %s program unknown", cmd, pgm.getName()));
                     }
                 }
             }
@@ -262,21 +264,21 @@ public class RetSyncComponent extends ComponentProvider {
         action_go.setDescription("Run program");
         dockingTool.addAction(action_go);
 
-        action_bp = breakPointActionFactory("ret-sync-bp", "bp", new KeyBindingData(KeyEvent.VK_F2, 0));
+        action_bp = breakPointActionFactory("ret-sync-bp", "bp", false, new KeyBindingData(KeyEvent.VK_F2, 0));
         action_bp.setDescription("Set breakpoint");
         dockingTool.addAction(action_bp);
 
-        action_hbp = breakPointActionFactory("ret-sync-hbp", "hbp",
+        action_hbp = breakPointActionFactory("ret-sync-hbp", "hbp", false,
                 new KeyBindingData(KeyEvent.VK_F2, InputEvent.CTRL_DOWN_MASK));
         action_hbp.setDescription("Set hardware breakpoint");
         dockingTool.addAction(action_hbp);
 
-        action_bp1 = breakPointActionFactory("ret-sync-bp1", "bp1",
+        action_bp1 = breakPointActionFactory("ret-sync-bp1", "bp1", true,
                 new KeyBindingData(KeyEvent.VK_F3, InputEvent.ALT_DOWN_MASK));
         action_bp1.setDescription("Set one-shot hardware breakpoint");
         dockingTool.addAction(action_bp1);
 
-        action_hbp1 = breakPointActionFactory("ret-sync-hbp1", "hbp1",
+        action_hbp1 = breakPointActionFactory("ret-sync-hbp1", "hbp1", true,
                 new KeyBindingData(KeyEvent.VK_F3, InputEvent.CTRL_DOWN_MASK));
         action_hbp1.setDescription("Set one-shot hardware breakpoint");
         dockingTool.addAction(action_hbp1);
