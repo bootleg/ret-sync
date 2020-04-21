@@ -439,7 +439,10 @@ HRESULT synchelp()
 		" > !synchelp                      = display this help\n"
 		" > !cmt <string>                  = add comment at current eip in IDA\n"
 		" > !rcmt <string>                 = reset comments at current eip in IDA\n"
-		" > !idblist                       = display list of all IDB clients connected to the dispatcher\n");
+		" > !idblist                       = display list of all IDB clients connected to the dispatcher\n"
+		" > !idb <module name>             = set given module as the active idb (see !idblist)\n"
+		" > !idbn <n>                      = set active idb to the n_th client. n should be a valid decimal value\n"
+		" > !translate <base> <addr> <mod> = rebase an address with respect to local module's base\n\n");
 
 	return hRes;
 }
@@ -451,11 +454,6 @@ HRESULT idblist()
 	HRESULT hRes = S_OK;
 	int NbBytesRecvd = 0;
 	LPSTR msg = NULL;
-
-	if (!g_Synchronized) {
-		_plugin_logputs("[sync] not synced, !idblist command unavailable\n");
-		return hRes;
-	}
 
 	ReleasePollTimer();
 
@@ -473,6 +471,125 @@ HRESULT idblist()
 
 RESTORE_TIMER:
 	CreatePollTimer();
+	return hRes;
+}
+
+
+HRESULT idbn(PSTR Args)
+{
+	HRESULT hRes = S_OK;
+	int NbBytesRecvd = 0;
+	char* msg = NULL;
+	char* param = NULL;
+	char* img_name = NULL;
+	char* context = NULL;
+	ULONG_PTR modbase = NULL;
+
+	// strip command and trailing whitespaces
+	strtok_s(Args, " ", &param);
+	strtok_s(param, " ", &context);
+
+	ReleasePollTimer();
+
+	hRes = TunnelSend("[notice]{\"type\":\"idb_n\",\"idb\":\"%s\"}\n", param);
+	if (FAILED(hRes)) {
+		_plugin_logputs("[sync] !idbn failed to send notice\n");
+		return E_FAIL;
+	}
+
+	hRes = TunnelReceive(&NbBytesRecvd, &msg);
+	if (FAILED(hRes))
+		goto DBG_ERROR;
+
+	// check if dispatcher answered with an error message
+	// e.g. "> idb_n error: index %d is invalid (see idblist)"
+	if (strstr(msg, "> idb_n error:") != NULL)
+	{
+		_plugin_logprintf("%s\n", msg);
+		goto DBG_ERROR;
+	}
+
+	strtok_s(msg, "\"", &context);
+	img_name = strtok_s(NULL, "\"", &context);
+	if (img_name == NULL)
+	{
+		_plugin_logputs("[sync] idb_n notice: invalid answser - could not extract image name\n");
+		goto DBG_ERROR;
+	}
+
+	_plugin_logprintf("idbn: %s\n", img_name);
+
+	modbase = DbgFunctions()->ModBaseFromName(img_name);
+	if (!modbase)
+	{
+		_plugin_logprintf("[sync] idbn: ModBaseFromName(%s) failed get module base...\n", img_name);
+		return E_FAIL;
+	}
+
+	_plugin_logprintf("[sync] idbn: %s at %Ix\n", img_name, modbase);
+
+	// Send this module its remote base address
+	hRes = TunnelSend("[sync]{\"type\":\"rbase\",\"rbase\":%llu}\n", (UINT64)modbase);
+	if (FAILED(hRes)) {
+		goto DBG_ERROR;
+	}
+
+	goto TIMER_REARM_EXIT;
+
+DBG_ERROR:
+	// send dbg_err notice to disable the idb as its remote address base
+	// was not properly resolved
+	TunnelSend("[notice]{\"type\":\"dbg_err\"}\n");
+
+TIMER_REARM_EXIT:
+	CreatePollTimer();
+
+	if (msg != NULL)
+		free(msg);
+
+	return hRes;
+}
+
+
+HRESULT idb(PSTR Args)
+{
+	HRESULT hRes = S_OK;
+	char* context = NULL;
+	char* param = NULL;
+	ULONG_PTR modbase = NULL;
+
+	// strip command and trailing whitespaces
+	strtok_s(Args, " ", &param);
+	strtok_s(param, " ", &context);
+
+	hRes = TunnelSend("[notice]{\"type\":\"module\",\"path\":\"%s\"}\n", param);
+	if (FAILED(hRes)) {
+		_plugin_logputs("[sync] TunnelSend failed for module notice\n");
+		return hRes;
+	}
+
+	modbase = DbgFunctions()->ModBaseFromName(param);
+	if (!modbase)
+	{
+		_plugin_logprintf("[sync] idb: ModBaseFromName(%s) failed to get module base...\n", param);
+		goto DBG_ERROR;
+	}
+
+	_plugin_logprintf("[sync] idb: %s at %Ix\n", param, modbase);
+
+	// Send this module its remote base address
+	hRes = TunnelSend("[sync]{\"type\":\"rbase\",\"rbase\":%llu}\n", (UINT64)modbase);
+	if (FAILED(hRes)) {
+		_plugin_logputs("[sync] TunnelSend failed for rbase message\n");
+		goto DBG_ERROR;
+	}
+
+	return hRes;
+
+DBG_ERROR:
+	// send dbg_err notice to disable the idb as its remote address base
+	// was not properly resolved
+	TunnelSend("[notice]{\"type\":\"dbg_err\"}\n");
 	return hRes;
 }
 
@@ -510,6 +627,7 @@ HRESULT cmt(PSTR Args)
 			_plugin_logprintf("[sync] failed to execute \"%s\" command\n", g_CommandBuffer);
 		}
 	}
+	ZeroMemory(g_CommandBuffer, _countof(g_CommandBuffer));
 
 	hRes = TunnelSend("[sync]{\"type\":\"cmt\",\"msg\":\"%s\",\"base\":%llu,\"offset\":%llu}\n", token, (ULONG64)g_Base, (ULONG64)g_Offset);
 	if (FAILED(hRes))
@@ -547,12 +665,63 @@ HRESULT rcmt()
 			_plugin_logprintf("[sync] failed to execute \"%s\" command\n", g_CommandBuffer);
 		}
 	}
+	ZeroMemory(g_CommandBuffer, _countof(g_CommandBuffer));
 
 	hRes = TunnelSend("[sync]{\"type\":\"rcmt\",\"msg\":\"%s\",\"base\":%llu,\"offset\":%llu}\n", "", (ULONG64)g_Base, (ULONG64)g_Offset);
 	if (FAILED(hRes))
 	{
 		_plugin_logputs("[sync] failed to reset comment\n");
 	}
+
+	return hRes;
+}
+
+
+// reset comment (rcmt) command implementation
+HRESULT translate(PSTR Args)
+{
+	HRESULT hRes = S_OK;
+	BOOL bRes = FALSE;
+	int res = 0;
+	char* context = NULL;
+	char* rbase = NULL;
+	char* ea = NULL;
+	char* mod = NULL;
+	ULONG_PTR modbase = NULL;
+
+	if (!g_Synchronized) {
+		_plugin_logputs("[sync] not synced, !translate command unavailable\n");
+		return E_FAIL;
+	}
+
+	strtok_s(Args, " ", &context);
+	rbase = strtok_s(NULL, " ", &context);
+	ea = strtok_s(NULL, " ", &context);
+	mod = strtok_s(NULL, " ", &context);
+
+	if ((rbase == NULL) || (ea == NULL) || (mod == NULL)) {
+		_plugin_logputs("[sync] !translate <base> <ea> <mod>   (this command is meant to be used by a disassembler plugin)\n");
+	}
+
+	modbase = DbgFunctions()->ModBaseFromName(mod);
+	if (!modbase)
+	{
+		_plugin_logprintf("[sync] translate: ModBaseFromName(%s) failed to get module base...\n", mod);
+		return E_FAIL;
+	}
+
+	res = _snprintf_s(g_CommandBuffer, _countof(g_CommandBuffer), _TRUNCATE, "disasm %#Ix-%s+%s", modbase, rbase, ea);
+	if (res == _TRUNCATE) {
+		_plugin_logputs("[sync] truncation occured in disasm command generation\n");
+	}
+	else
+	{
+		bRes = DbgCmdExec(g_CommandBuffer);
+		if (!bRes) {
+			_plugin_logprintf("[sync] failed to execute \"%s\" command\n", g_CommandBuffer);
+		}
+	}
+	ZeroMemory(g_CommandBuffer, _countof(g_CommandBuffer));
 
 	return hRes;
 }
@@ -585,7 +754,51 @@ static bool cbSynchelpCommand(int argc, char* argv[])
 static bool cbIdblistCommand(int argc, char* argv[])
 {
 	_plugin_logputs("[sync] idblist command!");
+
+	if (!g_Synchronized) {
+		_plugin_logputs("[sync] not synced, !idblist command unavailable\n");
+		return false;
+	}
+
 	idblist();
+	return true;
+}
+
+
+static bool cbIdbnCommand(int argc, char* argv[])
+{
+	_plugin_logputs("[sync] idbn command!");
+
+	if (!g_Synchronized) {
+		_plugin_logputs("[sync] not synced, !idbn command unavailable\n");
+		return false;
+	}
+
+	if (strlen(argv[0]) < _countof("!idbn")) {
+		_plugin_logputs("[sync] !idbn <idb num>\n");
+		return false;
+	}
+
+	idbn((PSTR)argv[0]);
+	return true;
+}
+
+
+static bool cbIdbCommand(int argc, char* argv[])
+{
+	_plugin_logputs("[sync] idb command!");
+
+	if (!g_Synchronized) {
+		_plugin_logputs("[sync] not synced, !idb command unavailable\n");
+		return false;
+	}
+
+	if (strlen(argv[0]) < _countof("!idb")) {
+		_plugin_logputs("[sync] !idb <module name>\n");
+		return false;
+	}
+
+	idb((PSTR)argv[0]);
 	return true;
 }
 
@@ -596,7 +809,7 @@ static bool cbCmtCommand(int argc, char* argv[])
 	_plugin_logputs("[sync] cmt command!");
 #endif
 
-	if (strlen(argv[0]) == 4) {
+	if (strlen(argv[0]) < _countof("!cmt")) {
 		_plugin_logputs("[sync] !cmt <comment to add>\n");
 		return false;
 	}
@@ -613,6 +826,22 @@ static bool cbRcmtCommand(int argc, char* argv[])
 #endif
 
 	rcmt();
+	return true;
+}
+
+
+static bool cbTranslateCommand(int argc, char* argv[])
+{
+#if VERBOSE >= 2
+	_plugin_logputs("[sync] translate command!");
+#endif
+
+	if (strlen(argv[0]) < _countof("!translate")) {
+		_plugin_logputs("[sync] !translate <base> <ea> <mod>   (this command is meant to be used by a disassembler plugin)\n");
+		return false;
+	}
+
+	translate(argv[0]);
 	return true;
 }
 
@@ -711,11 +940,20 @@ void coreInit(PLUG_INITSTRUCT* initStruct)
 	if (!_plugin_registercommand(pluginHandle, "!idblist", cbIdblistCommand, true))
 		_plugin_logputs("[sync] error registering the \"!idblist\" command!");
 
+	if (!_plugin_registercommand(pluginHandle, "!idbn", cbIdbnCommand, true))
+		_plugin_logputs("[sync] error registering the \"!idbn\" command!");
+
+	if (!_plugin_registercommand(pluginHandle, "!idb", cbIdbCommand, true))
+		_plugin_logputs("[sync] error registering the \"!idb\" command!");
+
 	if (!_plugin_registercommand(pluginHandle, "!cmt", cbCmtCommand, true))
 		_plugin_logputs("[sync] error registering the \"!cmt\" command!");
 
 	if (!_plugin_registercommand(pluginHandle, "!rcmt", cbRcmtCommand, true))
 		_plugin_logputs("[sync] error registering the \"!rcmt\" command!");
+
+	if (!_plugin_registercommand(pluginHandle, "!translate", cbTranslateCommand, true))
+		_plugin_logputs("[sync] error registering the \"!translate\" command!");
 
 	// initialize globals
 	g_Synchronized = FALSE;
@@ -748,8 +986,11 @@ void coreStop()
 	_plugin_unregistercommand(pluginHandle, "!syncoff");
 	_plugin_unregistercommand(pluginHandle, "!synchelp");
 	_plugin_unregistercommand(pluginHandle, "!idblist");
+	_plugin_unregistercommand(pluginHandle, "!idbn");
+	_plugin_unregistercommand(pluginHandle, "!idb");
 	_plugin_unregistercommand(pluginHandle, "!cmt");
 	_plugin_unregistercommand(pluginHandle, "!rcmt");
+	_plugin_unregistercommand(pluginHandle, "!translate");
 	_plugin_menuclear(hMenu);
 }
 
