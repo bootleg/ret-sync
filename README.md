@@ -96,7 +96,7 @@ Python standard libraries for releases 2.7 and newer.
 Pre-built binaries for WinDbg/OllyDbg/OllyDbg2/x64dbg debuggers are proposed
 through an ``Azure DevOps`` pipeline: [![Build Status](https://dev.azure.com/bootlegdev/ret-sync-release/_apis/build/status/ret-sync-release-CI?branchName=master)](https://dev.azure.com/bootlegdev/ret-sync-release/_build/latest?definitionId=8?branchName=master)
 
-Select the last build and check under the ``Related`` section: ``6 published``.
+Select the last build and check the artifacts under the ``Related`` section: ``6 published``.
 
 ![](img/pipeline.png)
 
@@ -895,6 +895,9 @@ Due to the beta status of OllyDbg2 API, only the following features have been im
  > !cmt <string>                  = add comment at current eip in IDA
  > !rcmt <string>                 = reset comments at current eip in IDA
  > !idblist                       = display list of all IDB clients connected to the dispatcher
+ > !idb <module name>             = set given module as the active idb (see !idblist)
+ > !idbn <n>                      = set active idb to the n_th client. n should be a valid decimal value
+ > !translate <base> <addr> <mod> = rebase an address with respect to local module's base
 ```
 
 
@@ -911,7 +914,7 @@ While mostly focus on dynamic analysis, it is of-course possible to use other to
 
 # Known Bugs/Limitations
 
-- Tested with Python 2.7/3.7, IDA 7.4 (Windows, Linux and Mac OS X), Ghidra 9.1, GNU gdb (GDB), 7.4.1 (Debian), lldb 310.2.37.
+- Tested with Python 2.7/3.7, IDA 7.4SP1 (Windows, Linux and Mac OS X), Ghidra 9.1.2, GNU gdb (GDB), 7.4.1 (Debian), lldb 310.2.37.
 - **THERE IS NO AUTHENTICATION/ENCRYPTION** whatsoever between the parties; you're on your own.
 - Self modifying code is out of scope.
 

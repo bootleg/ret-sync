@@ -710,9 +710,8 @@ class RequestHandler(object):
         ea = idaapi.get_screen_ea()
         mod = self.name.split('.')[0].strip()
         cmd = self.dbg_dialect['prefix'] + "translate 0x%x 0x%x %s" % (self.base, ea, mod)
-
         self.notice_broker("cmd", "\"cmd\":\"%s\"" % cmd)
-        rs_log("translate address 0x%x" % ea)
+        rs_debug("translate address 0x%x" % ea)
 
     # send a go command (Alt-F5) to the debugger (via the broker and dispatcher)
     def go_notice(self):

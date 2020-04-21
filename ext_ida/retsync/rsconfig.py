@@ -93,7 +93,7 @@ DBG_DIALECTS = {
         'bp1': 'xxx ',
         'hbp1': 'xxx '},
     'x64_dbg': {
-        'prefix': '',
+        'prefix': '!',
         'si': 'sti',
         'so': 'sto',
         'go': 'go',
