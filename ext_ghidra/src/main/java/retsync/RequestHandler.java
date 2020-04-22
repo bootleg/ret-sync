@@ -291,7 +291,8 @@ public class RequestHandler {
                 }
 
                 rsplugin.setActiveProgram(pgmList[idbn]);
-                curClient.out.println(String.format("> active program is now \"%s\" (%d)", rsplugin.program.getName(), idbn));
+                curClient.out.println(
+                        String.format("> active program is now \"%s\" (%d)", rsplugin.program.getName(), idbn));
                 break;
 
                 // color trace request
@@ -420,8 +421,12 @@ public class RequestHandler {
                 if (symIter.size() != 1) {
                     rsplugin.cs.println(String.format("[x] ambiguous symbol: %s", symName));
                 } else {
-                    String symAddrReply = String.format("0x%x", symIter.get(0).getAddress().getOffset());
-                    rsplugin.reqHandler.curClient.sendRaw(symAddrReply);
+                    Address symAddr = symIter.get(0).getAddress();
+                    symAddr = rsplugin.rebaseRemote(symAddr);
+                    if (symAddr != null) {
+                        String symAddrReply = String.format("0x%x", symAddr.getOffset());
+                        rsplugin.reqHandler.curClient.sendRaw(symAddrReply);
+                    }
                 }
                 break;
 
