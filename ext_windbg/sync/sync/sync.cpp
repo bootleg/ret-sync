@@ -1314,7 +1314,7 @@ idb(PDEBUG_CLIENT4 Client, PCSTR Args)
         return hRes;
     }
 
-    dprintf("> base address: 0x%x\n", Base);
+    dprintf("> base address: %#Ix\n", Base);
 
     /*
     msdn: GetModuleNames method returns the names of the specified module.
