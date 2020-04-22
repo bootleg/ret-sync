@@ -383,16 +383,16 @@ class RequestHandler(object):
 
     # return address for a given idb's symbol
     def req_rrln(self, hash):
-        sym, rbase, offset, base = hash['sym'], hash['rbase'], hash['offset'], hash['base']
+        sym = hash['sym']
+        rs_log("rrln> symbol \"%s\"" % sym)
 
-        rs_log("%s -  0x%x - 0x%x - 0x%x" % (sym, rbase, offset, base))
-
-        addr = idc.get_name_ea_simple(sym)
+        addr = idc.get_name_ea_simple(str(sym))
         if addr:
-            self.notice_broker("cmd", "\"cmd\":\"%s\"" % addr)
-            rs_log("resolved address: %s" % addr)
+            raddr = self.rebase_remote(addr)
+            self.notice_broker("cmd", "\"cmd\":\"%s\"" % raddr)
+            rs_log("rrln> remote: 0x%x, local: 0x%x)" % (raddr, addr))
         else:
-            rs_log("could not resolve address for symbol %s" % sym)
+            rs_log("rrln> symbol not found \"%s\"" % sym)
 
     # add label request at addr
     def req_lbl(self, hash):
