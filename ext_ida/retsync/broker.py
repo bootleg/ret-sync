@@ -47,7 +47,6 @@ except ImportError:
 try:
     from subprocess import DEVNULL
 except ImportError:
-    import os
     DEVNULL = open(os.devnull, 'wb')
 
 import rsconfig
