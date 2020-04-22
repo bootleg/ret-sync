@@ -43,6 +43,13 @@ except ImportError:
     print("[-] failed to import json\n%s" % repr(sys.exc_info()))
     sys.exit(0)
 
+# python 2.7 compat
+try:
+    from subprocess import DEVNULL
+except ImportError:
+    import os
+    DEVNULL = open(os.devnull, 'wb')
+
 import rsconfig
 from rsconfig import rs_encode, rs_decode
 
@@ -109,8 +116,8 @@ class BrokerSrv():
         args = [arg.replace('\"', '') for arg in list(tokenizer)]
         try:
             proc = subprocess.Popen(args, shell=False,
-                                    stdout=subprocess.DEVNULL,
-                                    stderr=subprocess.DEVNULL)
+                                    stdout=DEVNULL,
+                                    stderr=DEVNULL)
             pid = proc.pid
         except (OSError, ValueError):
             pid = None
