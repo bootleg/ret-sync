@@ -788,9 +788,7 @@ class Bx(WrappedCommand):
         # First disable tunnel polling for commands (happy race...)
         self.sync.release_poll_timer()
 
-        # XXX - we don't support a rebase yet
-        self.sync.tunnel.send("[sync]{\"type\":\"rrln\",\"sym\":\"%s\",\"rbase\":%d,\"base\":%d,\"offset\":%d}\n" %
-                              (sym, 0x0, self.sync.base, self.sync.offset))
+        self.sync.tunnel.send("[sync]{\"type\":\"rrln\",\"sym\":\"%s\"}\n" % sym)
 
         # Let time for the IDB client to reply if it exists
         time.sleep(0.150)
