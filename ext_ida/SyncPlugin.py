@@ -63,6 +63,7 @@ import ida_bytes
 import ida_graph
 import ida_range
 import ida_funcs
+import ida_name
 import ida_hexrays
 import ida_kernwin
 import ida_idaapi
@@ -147,7 +148,7 @@ class RequestHandler(object):
     def is_safe(self, offset):
         return not (idc.get_segm_start(offset) == ida_idaapi.BADADDR)
 
-    # rebase address with respect to local image base
+    # rebase (and update) address with respect to local image base
     def rebase(self, base, offset):
         if base is not None:
             # check for non-compliant debugger client
@@ -155,16 +156,22 @@ class RequestHandler(object):
                 rs_log('unsafe addr: 0x%x > 0x%x' % (base, offset))
                 return None
 
-            if not (self.base == base):
-                offset = (offset - base) + self.base
-
             # update base address of remote module
             if self.base_remote != base:
                 self.base_remote = base
 
+            offset = self.rebase_local(offset)
+
         if not self.is_safe(offset):
             rs_log('unsafe addr: 0x%x not in valid segment' % (offset))
             return None
+
+        return offset
+
+    # rebase address with respect to local image base
+    def rebase_local(self, offset):
+        if not (self.base == self.base_remote):
+            offset = (offset - self.base_remote) + self.base
 
         return offset
 
@@ -339,11 +346,11 @@ class RequestHandler(object):
 
     # return idb's symbol for a given address
     def req_rln(self, hash):
-        raddr, rbase, offset, base = hash['raddr'], hash['rbase'], hash['offset'], hash['base']
+        raddr = hash['raddr']
 
-        rs_debug("rln: 0x%x -  0x%x - 0x%x - 0x%x" % (raddr, rbase, offset, base))
+        rs_debug("rln: 0x%x" % raddr)
 
-        addr = self.rebase(rbase, raddr)
+        addr = self.rebase_local(raddr)
         if not addr:
             rs_log("could not rebase this address (0x%x)" % raddr)
             return
@@ -505,7 +512,7 @@ class RequestHandler(object):
         if remote == '0':
             output = '[!] warning, no Debug Directory'
         elif local == remote:
-            output = 'module successfully matched'
+            output = '[+] module successfully matched'
         else:
             output = '[!] warning, modules mismatch'
 
