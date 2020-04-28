@@ -169,6 +169,7 @@ public class RequestHandler {
             case "dbg_err":
                 rsplugin.clrs.cbColorFinal();
                 rsplugin.syncEnabled = false;
+                rsplugin.cs.println(String.format("[<] dbg err: disabling current program"));
                 break;
 
                 // debugger notice that its current module has changed
@@ -404,10 +405,9 @@ public class RequestHandler {
 
                 // return program's symbol for a given addr
             case "rln":
-                rbase = sync.getLong("rbase");
                 raddr = sync.getLong("raddr");
-
-                String sym = rsplugin.getSymAt(rbase, raddr);
+                Address reqAddr = rsplugin.rebaseLocal(raddr);
+                String sym = rsplugin.getSymAt(reqAddr);
                 if (sym != null) {
                     rsplugin.reqHandler.curClient.sendRaw(sym);
                 }

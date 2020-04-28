@@ -340,35 +340,46 @@ public class RetSyncPlugin extends ProgramPlugin {
         return imageBaseRemote != null;
     }
 
+    // compare remote image base with offset
+    int cmpRemoteBase(long rbase) {
+        return imageBaseRemote.compareTo(imageBaseRemote.getNewAddress(rbase));
+    }
+
     // rebase remote address with respect to
-    // current program image base
+    // current program image base and update remote base address
     Address rebase(long base, long offset) {
+        imageBaseRemote = imageBaseLocal.getNewAddress(base);
+        return rebaseLocal(imageBaseLocal.getNewAddress(offset));
+    }
+
+    // rebase remote address with respect to
+    // local program image base
+    Address rebaseLocal(Address loc) {
         Address dest;
 
         if (program == null)
             return null;
 
         try {
-            dest = imageBaseLocal.addNoWrap(offset - base);
+            dest = imageBaseLocal.addNoWrap(loc.subtract(imageBaseRemote));
         } catch (AddressOverflowException e) {
-            cs.println(String.format("[x] unsafe rebase (wrap): 0x%x - 0x%x", base, offset));
+            cs.println(String.format("[x] unsafe rebase local (wrap): %s - %s", imageBaseRemote, loc));
             return null;
         }
 
         if (!dest.getAddressSpace().isLoadedMemorySpace()) {
-            cs.println(String.format("[x] unsafe rebase: 0x%x - 0x%x", base, offset));
+            cs.println(String.format("[x] unsafe rebase local: %s", loc));
             return null;
         }
-
-        imageBaseRemote = imageBaseLocal.getNewAddress(base);
 
         return dest;
     }
 
-    // compare remote image base with
-    // offset from arg
-    int cmpRemoteBase(long rbase) {
-        return imageBaseRemote.compareTo(imageBaseRemote.getNewAddress(rbase));
+    // rebase remote address with respect to
+    // local program image base
+    // method overloading for long type
+    Address rebaseLocal(long offset) {
+        return rebaseLocal(imageBaseLocal.getNewAddress(offset));
     }
 
     // rebase local address with respect to
@@ -382,12 +393,7 @@ public class RetSyncPlugin extends ProgramPlugin {
         try {
             dest = imageBaseRemote.addNoWrap(loc.subtract(imageBaseLocal));
         } catch (AddressOverflowException e) {
-            cs.println(String.format("[x] unsafe rebase remote (wrap): 0x%x - 0x%x", imageBaseRemote, loc));
-            return null;
-        }
-
-        if (!dest.getAddressSpace().isLoadedMemorySpace()) {
-            cs.println(String.format("[x] unsafe rebase remote: 0x%x", loc.getOffset()));
+            cs.println(String.format("[x] unsafe rebase remote (wrap): %s - %s", imageBaseRemote, loc));
             return null;
         }
 
@@ -499,40 +505,37 @@ public class RetSyncPlugin extends ProgramPlugin {
         return res;
     }
 
-    String getSymAt(long base, long offset) {
-        Address dest = null;
+    String getSymAt(Address symAddr) {
         String symName = null;
         SymbolTable symTable = program.getSymbolTable();
 
-        dest = rebase(base, offset);
-        if (dest != null) {
-            // look for 'first-hand' symbol (function name, label, etc.)
-            Symbol sym = symTable.getPrimarySymbol(dest);
-            if (sym != null) {
-                symName = sym.getName();
-            }
+        // look for 'first-hand' symbol (function name, label, etc.)
+        Symbol sym = symTable.getPrimarySymbol(symAddr);
+        if (sym != null) {
+            symName = sym.getName();
+            cs.println(String.format("[>] solved primary sym %s@%s", symName, symAddr));
+        }
 
-            // return offset with respect to function's entry point
-            if (symName == null) {
-                FunctionManager fm = program.getFunctionManager();
-                Function fn = fm.getFunctionContaining(dest);
+        // return offset with respect to function's entry point
+        if (symName == null) {
+            FunctionManager fm = program.getFunctionManager();
+            Function fn = fm.getFunctionContaining(symAddr);
 
-                if (fn != null) {
-                    Address ep = fn.getEntryPoint();
-                    if (dest.compareTo(ep) > 0) {
-                        symName = String.format("%s+0x%x", fn.getName(), dest.subtract(ep));
-                    } else {
-                        symName = String.format("%s-0x%x", fn.getName(), ep.subtract(dest));
-                    }
+            if (fn != null) {
+                Address ep = fn.getEntryPoint();
+                if (symAddr.compareTo(ep) > 0) {
+                    symName = String.format("%s+0x%x", fn.getName(), symAddr.subtract(ep));
+                } else {
+                    symName = String.format("%s-0x%x", fn.getName(), ep.subtract(symAddr));
                 }
-            }
-
-            if (symName != null) {
-                cs.println(String.format("[>] solved sym %s @ 0x%x", symName, dest.getOffset()));
-            } else {
-                cs.println(String.format("[sync] failed to get symbol at 0x%x", dest.getOffset()));
+                cs.println(String.format("[>] solved sym %s@%s", symName, symAddr));
             }
         }
+
+        if (symName == null) {
+            cs.println(String.format("[sync] failed to get symbol at %s", symAddr));
+        }
+
         return symName;
     }
 
