@@ -1048,6 +1048,9 @@ char* trim_entry(char* line)
 {
     char* backward = NULL;
 
+    // trim newline
+    strtok_s(line, "\n", &backward);
+
     // trim leading whitespace
     while (isspace(*line))
         line++;
@@ -1122,15 +1125,21 @@ HRESULT
 GetModuleByImageName(CHAR* ImageName, PULONG64 pModuleBase, PCHAR* pModuleName)
 {
     HRESULT hRes = S_OK;
+    errno_t err = 0;
     ULONG Loaded, Unloaded;
     ULONG ImageNameSize = 0;
-    ULONG LoadedImageNameSize = 0;
     ULONG ModuleNameSize = 0;
+    ULONG LoadedImageNameSize = 0;
     ULONG64 Base = 0;
-    CHAR ImageNameBuffer[MAX_NAME] = { 0 };
-    CHAR ModuleNameBuffer[MAX_NAME] = { 0 };
-    CHAR LoadedImageNameBuffer[MAX_NAME] = { 0 };
+    CHAR ImageNameBuffer[MAX_NAME] = {0};
+    CHAR ModuleNameBuffer[MAX_NAME] = {0};
+    CHAR LoadedImageNameBuffer[MAX_NAME] = {0};
     unsigned int i = 0;
+
+    if (pModuleBase != NULL)
+        *pModuleBase = NULL;
+    if (pModuleName != NULL)
+        *pModuleName = NULL;
 
     hRes = g_ExtSymbols->GetNumberModules(&Loaded, &Unloaded);
     if (FAILED(hRes)) {
@@ -1157,19 +1166,18 @@ GetModuleByImageName(CHAR* ImageName, PULONG64 pModuleBase, PCHAR* pModuleName)
             LoadedImageNameBuffer, MAX_NAME, &LoadedImageNameSize
         );
 
-        if (FAILED(hRes)) {
-            dprintf("[sync] GetModuleNames failed\n");
-            return hRes;
+        if (hRes != S_OK) {
+            dprintf("[sync] GetModuleNames failed (0x%x)\n", hRes);
+            return E_FAIL;
         }
 
-        if (strncmp(ImageName, ImageNameBuffer, ImageNameSize))
+        if (strcmp(ImageName, PathFindFileName(ImageNameBuffer)) == 0)
         {
             if (pModuleBase != NULL)
             {
                 hRes = g_ExtSymbols->GetModuleByIndex(i, pModuleBase);
                 if (FAILED(hRes)) {
                     dprintf("[sync] GetModuleByIndex failed\n");
-                    *pModuleBase = NULL;
                     return hRes;
                 }
             }
@@ -1177,14 +1185,19 @@ GetModuleByImageName(CHAR* ImageName, PULONG64 pModuleBase, PCHAR* pModuleName)
             if (pModuleName != NULL)
             {
                 *pModuleName = (PCHAR)malloc(ModuleNameSize);
-                strncpy_s(*pModuleName, ModuleNameSize, ModuleNameBuffer, _TRUNCATE);
+                err = strncpy_s(*pModuleName, ModuleNameSize, ModuleNameBuffer, _TRUNCATE);
+                if (err == STRUNCATE) {
+                    free(*pModuleName);
+                    return E_FAIL;
+                }
+
             }
 
-            break;
+            return hRes;
         }
     }
 
-    return hRes;
+    return E_FAIL;
 }
 
 HRESULT
@@ -1232,13 +1245,14 @@ idbn(PDEBUG_CLIENT4 Client, PCSTR Args)
     img_name = strtok_s(NULL, "\"", &context);
     if (img_name == NULL)
     {
-        dprintf("[sync] idb_n notice: invalid answser - could not extract image name\n");
+        dprintf("[sync] idb_n: invalid answser - could not extract image name\n");
         goto DBG_ERROR;
     }
 
     hRes = GetModuleByImageName(img_name, &Base, &mod_name);
     if (FAILED(hRes)) {
-        dprintf("[sync] GetModuleByImageName failed\n");
+        dprintf("[sync] idb_n: GetModuleByImageName failed for image \"%s\"\n", img_name);
+        dprintf("       module may not be loaded, idb switch canceled\n");
         goto DBG_ERROR;
     }
 
@@ -1310,7 +1324,8 @@ idb(PDEBUG_CLIENT4 Client, PCSTR Args)
     */
     hRes = g_ExtSymbols->GetModuleByModuleName2(Args, 0, DEBUG_GETMOD_NO_UNLOADED_MODULES, NULL, &Base);
     if (FAILED(hRes)) {
-        dprintf("[sync] GetModuleByModuleName2 failed for module: %s\n", Args);
+        dprintf("[sync] GetModuleByModuleName2 failed for module: \"%s\"\n", Args);
+        dprintf("       module may not be loaded, idb switch canceled\n");
         return hRes;
     }
 
@@ -1522,10 +1537,14 @@ CALLBACK
 rln(PDEBUG_CLIENT4 Client, PCSTR Args)
 {
     HRESULT hRes;
-    ULONG64 Base, Offset = 0;
+    ULONG64 Offset = 0;
+    ULONG64 Displacement = 0;
+    ULONG   NameSize = 0;
     ULONG RemainderIndex;
     DEBUG_VALUE DebugValue = {};
     char *msg = NULL;
+    char* sym = NULL;
+    char NameBuffer[MAX_NAME] = {0};
     int NbBytesRecvd = 0;
     INIT_API();
 
@@ -1541,31 +1560,19 @@ rln(PDEBUG_CLIENT4 Client, PCSTR Args)
     hRes = g_ExtControl->Evaluate(Args, DEBUG_VALUE_INT64, &DebugValue, &RemainderIndex);
     if (FAILED(hRes))
     {
-        dprintf("[sync] rebaseaddr: failed to evaluate expression\n");
+        dprintf("[sync] rln: failed to evaluate expression\n");
         return E_FAIL;
     }
 
     Offset = (ULONG64)DebugValue.I64;
 
-    /*
-    msdn: GetModuleByOffset method searches through the target's modules for one
-    whose memory allocation includes the specified location.
-    */
-    hRes = g_ExtSymbols->GetModuleByOffset(Offset, 0, NULL, &Base);
-    if (FAILED(hRes))
-    {
-        dprintf("[sync] rebaseaddr: failed to get module base for address 0x%x\n", Offset);
-        return E_FAIL;
-    }
-
     // First disable tunnel polling for commands (happy race...)
     ReleasePollTimer();
 
-    hRes = TunnelSend("[sync]{\"type\":\"rln\",\"raddr\":%llu,\"rbase\":%llu,\"base\":%llu,\"offset\":%llu}\n",
-        Offset, Base, g_Base, g_Offset);
+    hRes = TunnelSend("[sync]{\"type\":\"rln\",\"raddr\":%llu}\n", Offset);
     if (FAILED(hRes))
     {
-        dprintf("[sync] rln TunnelSend failed\n");
+        dprintf("[sync] rln: TunnelSend failed\n");
         goto Exit;
     }
 
@@ -1580,7 +1587,7 @@ rln(PDEBUG_CLIENT4 Client, PCSTR Args)
         goto Exit;
     }
 
-    if ((NbBytesRecvd == 0) | (msg == NULL))
+    if ((NbBytesRecvd == 0) || (msg == NULL))
     {
         dprintf("    -> no reply\n");
         goto Exit;
@@ -1591,19 +1598,27 @@ rln(PDEBUG_CLIENT4 Client, PCSTR Args)
         msg[NbBytesRecvd-1] = 0;
     }
 
-    dprintf("%s\n", msg);
+    // trim received sym
+    sym = trim_entry(msg);
+    dprintf("> resolved symbol: \"%s\"\n", sym);
 
     /*
     msdn: The AddSyntheticSymbol method adds a synthetic symbol to a module in the current process.
     */
-    hRes = g_ExtSymbols->AddSyntheticSymbol(Offset, 1, msg, DEBUG_ADDSYNTHSYM_DEFAULT, NULL);
+    hRes = g_ExtSymbols->AddSyntheticSymbol(Offset, 1, sym, DEBUG_ADDSYNTHSYM_DEFAULT, NULL);
     if (FAILED(hRes))
     {
-        // symbol may already exists
-        if (hRes != 0x800700b7)
+        if (hRes == 0x800700b7)
         {
-            dprintf("[sync] modmap: AddSyntheticSymbol failed, 0x%x\n", hRes);
-            hRes = E_FAIL;
+            dprintf("[sync] AddSyntheticSymbol error: a symbol already exists\n");
+            hRes = g_ExtSymbols->GetNearNameByOffset(Offset, 0, NameBuffer, _countof(NameBuffer), &NameSize, &Displacement);
+            if (hRes == S_OK) {
+                dprintf("> current symbol \"%s\" (disp: %#x)\n", NameBuffer, Displacement);
+            }
+        }
+        else
+        {
+            dprintf("[sync] rln: AddSyntheticSymbol failed, 0x%x\n", hRes);
         }
     }
 
@@ -2000,8 +2015,8 @@ modcheck(PDEBUG_CLIENT4 Client, PCSTR Args)
     DWORD cbBinary;
     int NbBytesRecvd = 0;
     LPSTR pszResString = NULL;
+    const CHAR* type;
     CHAR *msg = NULL;
-    CHAR *type;
     CHAR cmd[64] = { 0 };
     BOOL bUsePdb = TRUE;
     INIT_API();
@@ -2107,7 +2122,7 @@ modcheck(PDEBUG_CLIENT4 Client, PCSTR Args)
         goto Exit;
     }
 
-    if ((NbBytesRecvd > 0) & (msg != NULL))
+    if ((NbBytesRecvd > 0) && (msg != NULL))
     {
         dprintf("%s\n", msg);
     }
