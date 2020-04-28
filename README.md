@@ -914,7 +914,7 @@ While mostly focus on dynamic analysis, it is of-course possible to use other to
 
 # Known Bugs/Limitations
 
-- Tested with Python 2.7/3.7, IDA 7.4SP1 (Windows, Linux and Mac OS X), Ghidra 9.1.2, GNU gdb (GDB), 7.4.1 (Debian), lldb 310.2.37.
+- Tested with Python 2.7/3.7, IDA 7.4SP1 (Windows, Linux and Mac OS X), Ghidra 9.1.2, GNU gdb (GDB) 8.1.0 (Debian), lldb 310.2.37.
 - **THERE IS NO AUTHENTICATION/ENCRYPTION** whatsoever between the parties; you're on your own.
 - Self modifying code is out of scope.
 
