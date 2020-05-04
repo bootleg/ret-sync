@@ -900,6 +900,11 @@ Due to the beta status of OllyDbg2 API, only the following features have been im
  > !translate <base> <addr> <mod> = rebase an address with respect to local module's base
 ```
 
+Note: using the **!translate** command from a disassembler (IDA/Ghidra,
+``Alt-F2`` shortcut), will make the disassembler window to "jump" to the
+specific address (equivalent of running **disasm <rebased addr>** in x64dbg
+command line).
+
 
 # Extend
 
@@ -957,4 +962,4 @@ Hail to Bruce Dang, StalkR, @Ivanlef0u, Damien Aumaître, Sébastien Renaud and
 Kévin Szkudlapski, @_m00dy_, @saidelike, Xavier Mehrenberger, ben64, Raphaël
 Rigo, Jiss for their kindness, help, feedbacks and thoughts. Ilfak Guilfanov
 and Igor Skochinsky for their help with IDA's internals and outstanding
-support.
+support. Thank you also to contributors and for reporting issues/bugs.
