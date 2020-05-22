@@ -41,6 +41,13 @@ try:
 except ImportError:
     import ConfigParser as configparser
 
+if sys.version_info[0] == 2:
+    try:
+        from future import super
+    except ImportError as e:
+        print("[sync] 'future' package is needed (e.g., 'pip install future')")
+        raise(e)
+
 
 HOST = "localhost"
 PORT = 9100
