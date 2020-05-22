@@ -43,7 +43,7 @@ except ImportError:
 
 if sys.version_info[0] == 2:
     try:
-        from future import super
+        from future.builtins import super
     except ImportError as e:
         print("[sync] 'future' package is needed (e.g., 'pip install future')")
         raise(e)
