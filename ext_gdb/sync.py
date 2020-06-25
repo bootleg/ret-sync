@@ -37,9 +37,10 @@ import gdb
 import traceback
 
 try:
-    import configparser
+    from configparser import ConfigParser
 except ImportError:
-    import ConfigParser as configparser
+    from ConfigParser import SafeConfigParser as ConfigParser
+
 
 if sys.version_info[0] == 2:
     try:
@@ -1023,12 +1024,13 @@ if __name__ == "__main__":
         rs_log('plugin already loaded')
     except NameError as e:
         ctx = None
-        locations = [os.path.expanduser(os.path.dirname(__file__)),
+        locations = [os.path.abspath(os.path.dirname(__file__)),
                      os.environ['HOME']]
 
         for confpath in [os.path.join(p, '.sync') for p in locations]:
+
             if os.path.exists(confpath):
-                config = configparser.SafeConfigParser({'host': HOST, 'port': PORT, 'context': '', 'use_tmp_logging_file': USE_TMP_LOGGING_FILE})
+                config = ConfigParser({'host': HOST, 'port': PORT, 'context': '', 'use_tmp_logging_file': USE_TMP_LOGGING_FILE})
                 config.read(confpath)
                 rs_log("configuration file loaded from: %s" % confpath)
                 if config.has_section('GENERAL'):
