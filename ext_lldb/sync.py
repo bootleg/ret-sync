@@ -39,8 +39,13 @@ import threading
 import json
 import base64
 import os
-import ConfigParser
 import logging
+
+try:
+    from configparser import ConfigParser
+except ImportError:
+    from ConfigParser import SafeConfigParser as ConfigParser
+
 
 HOST = "localhost"
 PORT = 9100
@@ -62,11 +67,22 @@ CMD_SYNC = 2
 CMD_CLS = {CMD_NOTICE: "notice", CMD_SYNC: "sync"}
 
 
+# encoding settings (for data going in/out the plugin)
+RS_ENCODING = 'utf-8'
+
 # log settings
 LOG_LEVEL = logging.INFO
 LOG_PREFIX = 'sync'
 LOG_COLOR_ON = "\033[1m\033[34m"
 LOG_COLOR_OFF = "\033[0m"
+
+
+def rs_encode(buffer_str):
+    return buffer_str.encode(RS_ENCODING)
+
+
+def rs_decode(buffer_bytes):
+    return buffer_bytes.decode(RS_ENCODING)
 
 
 def rs_log(s, lvl=logging.INFO):
@@ -81,7 +97,7 @@ class Tunnel():
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.connect((host, PORT))
-        except socket.error, msg:
+        except socket.error as msg:
             self.sock.close()
             self.sock = None
             self.sync = False
@@ -99,8 +115,8 @@ class Tunnel():
             return
 
         try:
-            self.sock.send(msg)
-        except socket.error, msg:
+            self.sock.send(rs_encode(msg))
+        except socket.error as msg:
             self.sync = False
             self.close()
 
@@ -113,7 +129,7 @@ class Tunnel():
         if self.sock:
             try:
                 self.sock.close()
-            except socket.error, msg:
+            except socket.error as msg:
                 rs_log("tunnel_close error: %s" % msg)
 
         self.sync = False
@@ -297,7 +313,7 @@ def loadConfig():
 
     for confpath in locations:
         if os.path.exists(confpath):
-            config = ConfigParser.SafeConfigParser({'host': HOST, 'port': PORT})
+            config = ConfigParser({'host': HOST, 'port': PORT})
             config.read(confpath)
             HOST = config.get("INTERFACE", 'host')
             PORT = config.getint("INTERFACE", 'port')
