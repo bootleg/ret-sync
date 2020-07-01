@@ -35,9 +35,10 @@ import json
 import uuid
 
 try:
-    from ConfigParser import SafeConfigParser
+    from configparser import ConfigParser
 except ImportError:
-    from configparser import ConfigParser as SafeConfigParser
+    from ConfigParser import SafeConfigParser as ConfigParser
+
 
 from retsync.syncrays import Syncrays
 import retsync.rsconfig as rsconfig
@@ -1127,7 +1128,7 @@ class SyncForm_t(PluginForm):
                     confpath = os.path.join(os.path.realpath(os.environ[loc]), '.sync')
                     if os.path.exists(confpath):
                         rs_log("found config file: %s" % confpath)
-                        config = SafeConfigParser()
+                        config = ConfigParser()
                         config.read(confpath)
 
                         if config.has_option('ALIASES', name):
@@ -1138,7 +1139,7 @@ class SyncForm_t(PluginForm):
 
                         break
                 except Exception as e:
-                    err_log('failed to load configuration file')
+                    rs_log('failed to load configuration file')
 
         self.pdb_name_warning(name)
         return name
