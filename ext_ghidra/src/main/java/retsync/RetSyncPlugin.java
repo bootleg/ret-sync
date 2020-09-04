@@ -507,6 +507,12 @@ public class RetSyncPlugin extends ProgramPlugin {
 
     String getSymAt(Address symAddr) {
         String symName = null;
+
+        if (symAddr == null) {
+            cs.println(String.format("[x] failed to get symbol at null address"));
+            return null;
+        }
+
         SymbolTable symTable = program.getSymbolTable();
 
         // look for 'first-hand' symbol (function name, label, etc.)
