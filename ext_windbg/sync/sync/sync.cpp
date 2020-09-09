@@ -2149,10 +2149,10 @@ Exit:
 HRESULT
 KsParseLine(char *cmd, ULONG ProcType)
 {
-    HRESULT hRes;
+    HRESULT hRes = E_FAIL;
     int i;
     int nbArgs = (ProcType == IMAGE_FILE_MACHINE_AMD64) ? 4 : 3;
-    char *childebp, *retaddr, *arg, *callsite = NULL;
+    char *ctx = NULL, *childebp = NULL, *retaddr = NULL, *arg = NULL;
 
     // match hex address...
     if (!(((*cmd >= 0x30) && (*cmd <= 0x39)) || ((*cmd >= 0x61) && (*cmd <= 0x66))))
@@ -2164,10 +2164,11 @@ KsParseLine(char *cmd, ULONG ProcType)
         goto Exit;
     }
 
-    childebp = cmd;
 
-    if (FAILED(hRes = NextChunk(childebp, &retaddr)) ||
-        FAILED(hRes = NextChunk(retaddr, &arg)))
+    childebp = strtok_s(cmd, " ", &ctx);
+    retaddr = strtok_s(NULL, " ", &ctx);
+
+    if (childebp == NULL || retaddr == NULL)
         goto Exit;
 
     // output Child-SP and RetAddr (respectively with 'dc' and '!jmpto' as DML)
@@ -2188,9 +2189,9 @@ KsParseLine(char *cmd, ULONG ProcType)
     // output arguments, 4 when x64, 3 when x86 (with 'dc' as DML)
     for (i = 0; i < nbArgs; i++)
     {
-        if (FAILED(hRes = NextChunk(arg, &callsite))){
+        arg = strtok_s(NULL, " ", &ctx);
+        if (arg == NULL)
             goto Exit;
-        }
 
         hRes = g_ExtControl->ControlledOutput(
             DEBUG_OUTCTL_AMBIENT_DML,
@@ -2201,8 +2202,6 @@ KsParseLine(char *cmd, ULONG ProcType)
         if (FAILED(hRes)){
             goto Exit;
         }
-
-        arg = callsite;
     }
 
     if (ProcType == IMAGE_FILE_MACHINE_AMD64){
@@ -2214,7 +2213,7 @@ KsParseLine(char *cmd, ULONG ProcType)
         DEBUG_OUTCTL_AMBIENT_DML,
         DEBUG_OUTPUT_NORMAL,
         "<exec cmd=\"!jmpto %s\">%s</exec>\n",
-        callsite, callsite);
+        ctx, ctx);
 
 Exit:
     return hRes;

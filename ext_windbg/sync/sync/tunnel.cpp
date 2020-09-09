@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2016, Alexandre Gazet.
+Copyright (C) 2016-2020, Alexandre Gazet.
 
 Copyright (C) 2012-2015, Quarkslab.
 
@@ -155,26 +155,6 @@ ToHexString(const BYTE *pbBinary, DWORD cbBinary, LPSTR *pszString)
 
     hRes = ToStringEnc(CRYPT_STRING_HEX|CRYPT_STRING_NOCRLF, pbBinary, cbBinary, pszString);
     return hRes;
-}
-
-
-HRESULT
-NextChunk(char *cmd, char **nextc)
-{
-    char *tmp;
-
-    tmp = strchr(cmd, 0x20);
-    if (tmp == NULL)
-        return E_FAIL;
-
-    *tmp = 0;
-    *nextc = tmp+1;
-
-    if (**nextc == 0x3a){
-        NextChunk(*nextc, nextc);
-    }
-
-    return S_OK;
 }
 
 

@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2016, Alexandre Gazet.
+Copyright (C) 2016-2020, Alexandre Gazet.
 
 Copyright (C) 2012-2015, Quarkslab.
 
@@ -40,7 +40,5 @@ HRESULT ToHexString(const BYTE *pbBinary, DWORD cbBinary, LPSTR *pszString);
 HRESULT ToBase64(const BYTE *pbBinary, DWORD cbBinary, LPSTR *pszString);
 
 HRESULT FromBase64(LPCSTR pszString, BYTE **ppbBinary);
-
-HRESULT NextChunk(char *cmd, char **nextc);
 
 HRESULT WsaErrMsg(int LastError);
