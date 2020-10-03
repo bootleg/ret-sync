@@ -20,7 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "core.h"
-#include "pluginsdk\TitanEngine\TitanEngine.h"
 #include <windows.h>
 #include <stdio.h>
 #include <psapi.h>
@@ -41,6 +40,7 @@ static CRITICAL_SECTION g_CritSectPollRelease;
 // Debuggee's state;
 ULONG_PTR g_Offset = NULL;
 ULONG_PTR g_Base = NULL;
+REGDUMP regs;
 
 // Synchronisation mode
 static BOOL g_SyncAuto = true;
@@ -109,6 +109,25 @@ failed:
 }
 
 
+// mimic IDebugRegisters::GetInstructionOffset
+// returns the location of the current thread's current instruction.
+HRESULT 
+GetInstructionOffset(ULONG_PTR *cip)
+{
+	bool bRes = FALSE;
+	*cip = 0;
+
+	bRes = DbgGetRegDumpEx(&regs, sizeof(regs));
+	if (!bRes) {
+		_plugin_logprintf("[sync] failed to DbgGetRegDumpEx\n");
+		return E_FAIL;
+	}
+
+	*cip = regs.regcontext.cip;
+	return S_OK;
+}
+
+
 // Update state and send info to client: eip module's base address, offset, name
 HRESULT
 UpdateState()
@@ -118,7 +137,9 @@ UpdateState()
 	ULONG_PTR PrevBase = g_Base;
 	HANDLE hProcess = INVALID_HANDLE_VALUE;
 
-	g_Offset = GetContextData(UE_CIP);
+	hRes = GetInstructionOffset(&g_Offset);
+	if (FAILED(hRes))
+		goto UPDATE_FAILURE;
 
 	g_Base = DbgFunctions()->ModBaseFromAddr((duint)g_Offset);
 	if (!g_Base)
@@ -134,7 +155,7 @@ UpdateState()
 	// Check if we are in a new module
 	if ((g_Base != PrevBase) & g_SyncAuto)
 	{
-		hProcess = ((PROCESS_INFORMATION*)TitanGetProcessInformation())->hProcess;
+		hProcess = DbgGetProcessHandle();
 
 		dwRes = GetModuleBaseNameA(hProcess, (HMODULE)g_Base, g_NameBuffer, MAX_MODULE_SIZE);
 		if (dwRes == 0)
@@ -614,7 +635,9 @@ HRESULT cmt(PSTR Args)
 		return E_FAIL;
 	}
 
-	cip = GetContextData(UE_CIP);
+	hRes = GetInstructionOffset(&cip);
+	if (FAILED(hRes))
+		return E_FAIL;
 
 	res = _snprintf_s(g_CommandBuffer, _countof(g_CommandBuffer), _TRUNCATE, "commentset %Ix, \"%s\"", cip, token);
 	if (res == _TRUNCATE) {
@@ -652,7 +675,9 @@ HRESULT rcmt()
 		return E_FAIL;
 	}
 
-	cip = GetContextData(UE_CIP);
+	hRes = GetInstructionOffset(&cip);
+	if (FAILED(hRes))
+		return E_FAIL;
 
 	res = _snprintf_s(g_CommandBuffer, _countof(g_CommandBuffer), _TRUNCATE, "commentdel %Ix", cip);
 	if (res == _TRUNCATE) {
@@ -665,6 +690,7 @@ HRESULT rcmt()
 			_plugin_logprintf("[sync] failed to execute \"%s\" command\n", g_CommandBuffer);
 		}
 	}
+
 	ZeroMemory(g_CommandBuffer, _countof(g_CommandBuffer));
 
 	hRes = TunnelSend("[sync]{\"type\":\"rcmt\",\"msg\":\"%s\",\"base\":%llu,\"offset\":%llu}\n", "", (ULONG64)g_Base, (ULONG64)g_Offset);

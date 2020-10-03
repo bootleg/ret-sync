@@ -98,7 +98,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>false</GenerateDebugInformation>
-      <AdditionalDependencies>psapi.lib;pluginsdk\x32dbg.lib;pluginsdk\x32bridge.lib;pluginsdk\TitanEngine\TitanEngine_x86.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>psapi.lib;pluginsdk\x32dbg.lib;pluginsdk\x32bridge.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LinkStatus>
       </LinkStatus>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
@@ -125,7 +125,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>false</GenerateDebugInformation>
-      <AdditionalDependencies>psapi.lib;pluginsdk\x64dbg.lib;pluginsdk\x64bridge.lib;pluginsdk\TitanEngine\TitanEngine_x64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>psapi.lib;pluginsdk\x64dbg.lib;pluginsdk\x64bridge.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LinkStatus>
       </LinkStatus>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
@@ -152,7 +152,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>psapi.lib;pluginsdk\x32dbg.lib;pluginsdk\x32bridge.lib;pluginsdk\TitanEngine\TitanEngine_x86.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>psapi.lib;pluginsdk\x32dbg.lib;pluginsdk\x32bridge.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LinkStatus>
       </LinkStatus>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
@@ -182,7 +182,7 @@
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>psapi.lib;pluginsdk\x64dbg.lib;pluginsdk\x64bridge.lib;pluginsdk\TitanEngine\TitanEngine_x64.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>psapi.lib;pluginsdk\x64dbg.lib;pluginsdk\x64bridge.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <LinkStatus>
       </LinkStatus>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
