@@ -960,6 +960,7 @@ along with this program.  If not, see http://www.gnu.org/licenses/.
 
 Hail to Bruce Dang, StalkR, @Ivanlef0u, Damien Aumaître, Sébastien Renaud and
 Kévin Szkudlapski, @_m00dy_, @saidelike, Xavier Mehrenberger, ben64, Raphaël
-Rigo, Jiss for their kindness, help, feedbacks and thoughts. Ilfak Guilfanov
-and Igor Skochinsky for their help with IDA's internals and outstanding
-support. Thank you also to contributors and for reporting issues/bugs.
+Rigo, Jiss for their kindness, help, feedbacks and thoughts. Ilfak Guilfanov,
+Igor Skochinsky and Arnaud Diederen for their help with IDA's internals and 
+outstanding support. Finally, thank you also to all the contributors and 
+everyone who reported issues/bugs.
