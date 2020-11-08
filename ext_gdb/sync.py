@@ -1,4 +1,4 @@
-﻿#
+#
 # Copyright (C) 2016-2020, Alexandre Gazet.
 #
 # Copyright (C) 2012-2014, Quarkslab.
@@ -35,6 +35,8 @@ import logging
 import json
 import gdb
 import traceback
+from collections import namedtuple
+from string import Template
 
 try:
     from configparser import ConfigParser
@@ -42,11 +44,17 @@ except ImportError:
     from ConfigParser import SafeConfigParser as ConfigParser
 
 
+# default values
 HOST = "localhost"
 PORT = 9100
 USE_TMP_LOGGING_FILE = True
 TIMER_PERIOD = 0.1
 PYTHON_MAJOR = sys.version_info[0]
+
+# location searched by the debugger for a configuration file
+CONFIG_LOCATIONS = [
+    os.path.abspath(os.path.dirname(__file__)),
+    os.environ['HOME']]
 
 # encoding settings (for data going in/out the plugin)
 RS_ENCODING = 'utf-8'
@@ -56,6 +64,8 @@ LOG_LEVEL = logging.INFO
 LOG_PREFIX = 'sync'
 LOG_COLOR_ON = "\033[1m\033[34m"
 LOG_COLOR_OFF = "\033[0m"
+CMD_COLOR_ON = "\033[1m\033[91m"
+CMD_COLOR_OFF = "\033[0m"
 
 
 def rs_encode(buffer_str):
@@ -96,8 +106,8 @@ def show_last_exception(cmd):
 
 # function gdb_execute courtesy of StalkR
 # Wrapper when gdb.execute(cmd, to_string=True) does not work
-def gdb_execute(cmd):
-    if not USE_TMP_LOGGING_FILE:
+def gdb_execute(cmd, use_tmp_logging_file=True):
+    if not use_tmp_logging_file:
         return gdb.execute(cmd, to_string=True)
     f = tempfile.NamedTemporaryFile()
     gdb.execute("set logging file %s" % f.name)
@@ -145,18 +155,18 @@ def coalesce_space(maps, next_start, next_name):
     return False
 
 
-def get_maps(ctx=None):
+def get_maps(cfg):
     "Return list of maps (start, end, permissions, file name) via /proc"
 
-    if (ctx is not None) and ("mappings" in ctx.keys()):
-        return ctx["mappings"]
+    if (cfg.ctx is not None) and ("mappings" in cfg.ctx.keys()):
+        return cfg.ctx["mappings"]
 
-    pid = get_pid(ctx=ctx)
+    pid = get_pid(ctx=cfg.ctx)
     if pid is None:
         return []
 
     maps = []
-    mapping = gdb_execute('info proc mappings')
+    mapping = gdb_execute('info proc mappings', cfg.use_tmp_logging_file)
 
     try:
         for line in mapping.splitlines():
@@ -362,19 +372,17 @@ class WrappedCommand(gdb.Command):
 
 class Sync(gdb.Command):
 
-    def __init__(self, host, port, commands=[], ctx=None):
+    def __init__(self, cfg, commands=[]):
         rs_log("init")
         gdb.Command.__init__(self, "sync", gdb.COMMAND_OBSCURE, gdb.COMPLETE_NONE)
+        self.cfg = cfg
         self.auto = True
-        self.ctx = ctx
         self.pid = None
         self.maps = None
         self.base = None
         self.offset = None
         self.tunnel = None
         self.poller = None
-        self.host = host
-        self.port = port
         gdb.events.exited.connect(self.exit_handler)
         gdb.events.cont.connect(self.cont_handler)
         gdb.events.stop.connect(self.stop_handler)
@@ -393,7 +401,7 @@ class Sync(gdb.Command):
 
     def ensure_maps_loaded(self):
         if not self.maps:
-            self.maps = get_maps(ctx=self.ctx)
+            self.maps = get_maps(self.cfg)
             if not self.maps:
                 rs_log("failed to get proc mappings")
                 return None
@@ -409,7 +417,7 @@ class Sync(gdb.Command):
             return
 
         if not self.pid:
-            self.pid = get_pid(ctx=self.ctx)
+            self.pid = get_pid(ctx=self.cfg.ctx)
             if self.pid is None:
                 return
 
@@ -499,9 +507,9 @@ class Sync(gdb.Command):
 
         if not self.tunnel:
             if arg == "":
-                arg = self.host
+                arg = self.cfg.host
 
-            self.tunnel = Tunnel(arg, self.port)
+            self.tunnel = Tunnel(arg, self.cfg.port)
             if not self.tunnel.is_up():
                 rs_log("sync failed")
                 return
@@ -612,7 +620,7 @@ class Idbn(WrappedCommand):
 
         rs_log(msg)
         modname = msg.split('"')[1]
-        maps = get_maps(ctx=self.sync.ctx)
+        maps = get_maps(self.sync.cfg)
 
         if not maps:
             return 'failed to get program mappings'
@@ -638,7 +646,7 @@ class Idb(WrappedCommand):
             rs_log("usage: idb <module name>")
             return
 
-        maps = get_maps(ctx=self.sync.ctx)
+        maps = get_maps(self.sync.cfg)
         if not maps:
             rs_log("failed to get program mappings")
             return
@@ -664,7 +672,7 @@ class Modlist(WrappedCommand):
         gdb.Command.__init__(self, "modlist", gdb.COMMAND_RUNNING, gdb.COMPLETE_NONE)
 
     def _invoke(self, arg, from_tty):
-        print(gdb_execute('info proc mappings'))
+        print(gdb_execute('info proc mappings', self.sync.cfg.use_tmp_logging_file))
 
 
 class Cmt(WrappedCommand):
@@ -712,7 +720,7 @@ class Translate(WrappedCommand):
 
     def _invoke(self, arg, from_tty):
         base, address, module = [a.strip() for a in arg.split(" ")]
-        maps = get_maps(ctx=self.sync.ctx)
+        maps = get_maps(self.sync.cfg)
         if not maps:
             rs_log("failed to get program mappings")
             return None
@@ -756,7 +764,7 @@ class Cmd(WrappedCommand):
             rs_log("usage: cmd <command to execute and dump>")
             return
 
-        cmd_output = rs_encode(gdb_execute(arg))
+        cmd_output = rs_encode(gdb_execute(arg, self.sync.cfg.use_tmp_logging_file))
         b64_output = rs_decode(base64.b64encode(cmd_output))
         self.sync.tunnel.send("[sync] {\"type\":\"cmd\",\"msg\":\"%s\", \"base\":%d,\"offset\":%d}\n" % (b64_output, self.sync.base, self.sync.offset))
         rs_log("command output:\n%s" % cmd_output.strip())
@@ -776,7 +784,7 @@ class Rln(WrappedCommand):
             raddr = int(str(value), 16)
         except ValueError as e:
             rs_log("rln: failed to evaluate expression \"%s\"" % arg)
-            rs_log("     hint: be careful of register name case ($RIP -> $rip, cf. info registers)")
+            rs_log("     hint: be careful of register name case ($RIP ->$rip, cf. info registers)")
             return
 
         # First suspend tunnel polling for commands (happy race...)
@@ -984,72 +992,73 @@ class Help(WrappedCommand):
         gdb.Command.__init__(self, "synchelp", gdb.COMMAND_OBSCURE, gdb.COMPLETE_NONE)
 
     def _invoke(self, arg, from_tty):
-        rs_log(
-"""extension commands help:
-  > sync [<host>]                 = synchronize with <host> or the default value
-  > syncoff                       = stop synchronization
-  > idblist                       = display list of all IDB clients connected to the dispatcher
-  > idb <module name>             = set given module as the active idb (see !modlist)"
-  > idbn <n>                      = set active idb to the n_th client. n should be a valid decimal value
-  > modlist                       = wrapper around info proc mappings
-  > syncmodauto <on|off>          = enable/disable idb auto switch based on module name
-  > cmt [-a address] <string>     = add comment at current eip (or [addr]) in IDA
-  > rcmt [-a address] <string>    = reset comments at current eip (or [addr]) in IDA
-  > fcmt [-a address] <string>    = add a function comment for 'f = get_func(eip)' (or [addr]) in IDA
-  > cmd <string>                  = execute command <string> and add its output as comment at current eip in IDA
-  > bc <on|off|>                  = enable/disable path coloring in IDA
+        rs_log(Template("""extension commands help:
+  >$y sync$n [<host>]                 = synchronize with <host> or the default value
+  >$y syncoff$n                       = stop synchronization
+  >$y idblist$n                       = display list of all IDB clients connected to the dispatcher
+  >$y idb$n <module name>             = set given module as the active idb (see !modlist)"
+  >$y idbn$n <n>                      = set active idb to the n_th client. n should be a valid decimal value
+  >$y modlist$n                       = wrapper around info proc mappings
+  >$y syncmodauto$n <on|off>          = enable/disable idb auto switch based on module name
+  >$y cmt$n [-a address] <string>     = add comment at current eip (or [addr]) in IDA
+  >$y rcmt$n [-a address] <string>    = reset comments at current eip (or [addr]) in IDA
+  >$y fcmt$n [-a address] <string>    = add a function comment for 'f = get_func(eip)' (or [addr]) in IDA
+  >$y cmd$n <string>                  = execute command <string> and add its output as comment at current eip in IDA
+  >$y bc$n <on|off|>                  = enable/disable path coloring in IDA
                                     color a single instruction at current eip if called without argument
-  > rln <address>                 = ask IDA Pro to convert an address into a symbol
-  > bbt <symbol>                  = beautiful backtrace by executing "bt" and retrieving symbols from IDA Pro
+  >$y rln$n <address>                 = ask IDA Pro to convert an address into a symbol
+  >$y bbt$n <symbol>                  = beautiful backtrace by executing "bt" and retrieving symbols from IDA Pro
                                     for each element of the backtrace
-  > patch <addr> <count> <size>   = patch in IDA count elements of size (in [4, 8]) at address, reflecting live
-                                    context
-  > bx /i <symbol>                = similar to "x /i <address>" but supports a symbol resolved from IDA Pro
-  > cc                            = continue to current cursor in IDA Pro (set a breakpoints, continue and remove it)
-  > translate <base> <addr> <mod> = rebase an address with respect to local module's base\n""")
+  >$y patch$n <addr> <count> <size>   = patch in IDA count elements of size (in [4, 8]) at address, reflecting live
+                                   context
+  >$y pbx$n /i <symbol>               = similar to "x /i <address>" but supports a symbol resolved from IDA Pro
+  >$y pcc$n                           = continue to current cursor in IDA Pro (set a breakpoints, continue and remove it)
+  >$y translate$n <base> <addr> <mod> = rebase an address with respect to local module's base\n"""
+              ).substitute(y=CMD_COLOR_ON, n=CMD_COLOR_OFF))
+
+
+def load_configuration():
+    RsConfig = namedtuple('RsConfig', 'host port ctx use_tmp_logging_file')
+    host, port, ctx, use_tmp_logging_file = HOST, PORT, None, USE_TMP_LOGGING_FILE
+
+    for confpath in [os.path.join(p, '.sync') for p in CONFIG_LOCATIONS]:
+        if os.path.exists(confpath):
+            config = ConfigParser({'host': HOST, 'port': PORT, 'context': '', 'use_tmp_logging_file': USE_TMP_LOGGING_FILE})
+            config.read(confpath)
+            rs_log("configuration file loaded from: %s" % confpath)
+
+            if config.has_section('GENERAL'):
+                use_tmp_logging_file = config.getboolean('GENERAL', 'use_tmp_logging_file')
+                print("       general: use_tmp_logging_file is %s" % use_tmp_logging_file)
+
+            if config.has_section('INTERFACE'):
+                host = config.get('INTERFACE', 'host')
+                port = config.getint('INTERFACE', 'port')
+                print("       interface: %s:%s" % (host, port))
+
+            if config.has_section('INIT'):
+                ctx_entry = config.get('INIT', 'context')
+                if ctx_entry != '':
+                    try:
+                        # eval() for fun
+                        ctx = eval(ctx_entry)
+                        rs_log("initialization context:\n%s\n" % json.dumps(ctx, indent=4))
+                    except Exception as e:
+                        rs_log('failed to parse [INIT] section from .sync configuration file')
+                        show_last_exception('eval')
+
+            break
+
+    return RsConfig(host, port, ctx, use_tmp_logging_file)
 
 
 if __name__ == "__main__":
-
     try:
         id(SYNC_PLUGIN)
         rs_log('plugin already loaded')
     except NameError as e:
-        ctx = None
-        locations = [os.path.abspath(os.path.dirname(__file__)),
-                     os.environ['HOME']]
+        rs_cfg = load_configuration()
+        rs_commands = [Syncoff, Syncmodauto, Idblist, Idbn, Idb, Modlist, Cmt,
+                       Rcmt, Fcmt, Bc, Translate, Cmd, Rln, Bbt, Bx, Cc, Patch, Help]
 
-        for confpath in [os.path.join(p, '.sync') for p in locations]:
-
-            if os.path.exists(confpath):
-                config = ConfigParser({'host': HOST, 'port': PORT, 'context': '', 'use_tmp_logging_file': USE_TMP_LOGGING_FILE})
-                config.read(confpath)
-                rs_log("configuration file loaded from: %s" % confpath)
-                if config.has_section('GENERAL'):
-                    USE_TMP_LOGGING_FILE = config.getboolean('GENERAL', 'use_tmp_logging_file')
-                    print("       general: use_tmp_logging_file is %s" % USE_TMP_LOGGING_FILE)
-
-                if config.has_section('INTERFACE'):
-                    HOST = config.get('INTERFACE', 'host')
-                    PORT = config.getint('INTERFACE', 'port')
-                    print("       interface: %s:%s" % (HOST, PORT))
-
-                if config.has_section('INIT'):
-                    ctx_entry = config.get('INIT', 'context')
-                    if ctx_entry != '':
-                        try:
-                            # eval() for fun
-                            ctx = eval(ctx_entry)
-                            rs_log("initialization context:\n%s\n" % json.dumps(ctx, indent=4))
-                        except Exception as e:
-                            rs_log('failed to parse [INIT] section from .sync configuration file')
-                            show_last_exception('eval')
-                    else:
-                        ctx = None
-
-                break
-
-        commands = [Syncoff, Syncmodauto, Idblist, Idbn, Idb, Modlist, Cmt,
-                    Rcmt, Fcmt, Bc, Translate, Cmd, Rln, Bbt, Bx, Cc, Patch, Help]
-
-        SYNC_PLUGIN = Sync(HOST, PORT, commands, ctx)
+        SYNC_PLUGIN = Sync(rs_cfg, rs_commands)
