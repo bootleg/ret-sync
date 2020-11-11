@@ -387,6 +387,7 @@ class Sync(gdb.Command):
         gdb.events.cont.connect(self.cont_handler)
         gdb.events.stop.connect(self.stop_handler)
         gdb.events.new_objfile.connect(self.newobj_handler)
+        gdb.events.new_thread.connect(self.newthread_handler)
 
         for cmd in commands:
             cmd(self)
@@ -465,6 +466,9 @@ class Sync(gdb.Command):
             self.poller.stop()
             self.poller = None
 
+    def newthread_handler(self, event):
+        self.create_poll_timer()
+
     def newobj_handler(self, event):
         # force a new capture
         self.maps = None
@@ -517,12 +521,14 @@ class Sync(gdb.Command):
             id = self.identity()
             self.tunnel.send("[notice]{\"type\":\"new_dbg\",\"msg\":\"dbg connect - %s\",\"dialect\":\"gdb\"}\n" % id)
             rs_log("sync is now enabled with host %s" % str(arg))
-            self.create_poll_timer()
+
+            # make sure there is an active thread before running the Poller
+            if gdb.selected_thread():
+                self.create_poll_timer()
         else:
             print('(update)')
 
-        self.locate()
-        if self.poller is not None:
+        if self.poller:
             self.poller.enable()
 
 
@@ -1018,7 +1024,7 @@ class Help(WrappedCommand):
 
 
 def load_configuration():
-    RsConfig = namedtuple('RsConfig', 'host port ctx use_tmp_logging_file')
+    user_conf = namedtuple('user_conf', 'host port ctx use_tmp_logging_file')
     host, port, ctx, use_tmp_logging_file = HOST, PORT, None, USE_TMP_LOGGING_FILE
 
     for confpath in [os.path.join(p, '.sync') for p in CONFIG_LOCATIONS]:
@@ -1049,7 +1055,7 @@ def load_configuration():
 
             break
 
-    return RsConfig(host, port, ctx, use_tmp_logging_file)
+    return user_conf(host, port, ctx, use_tmp_logging_file)
 
 
 if __name__ == "__main__":
