@@ -33,29 +33,14 @@ import base64
 import socket
 import json
 import uuid
-
-try:
-    from configparser import ConfigParser
-except ImportError:
-    from ConfigParser import SafeConfigParser as ConfigParser
-
+import argparse
 
 from retsync.syncrays import Syncrays
 import retsync.rsconfig as rsconfig
-from retsync.rsconfig import rs_encode, rs_decode, rs_log, rs_debug
+from retsync.rsconfig import rs_encode, rs_decode, rs_log, rs_debug, load_configuration
 
-try:
-    import argparse
-except ImportError:
-    rs_log("[-] please make sure python's argparse module is available\n%s" % repr(sys.exc_info()))
-    raise
-
-try:
-    from PyQt5 import QtCore, QtWidgets
-    from PyQt5.QtCore import QProcess, QProcessEnvironment
-except ImportError:
-    rs_log("[-] failed to import Qt libs from PyQt5\n%s" % repr(sys.exc_info()))
-    raise
+from PyQt5 import QtCore, QtWidgets
+from PyQt5.QtCore import QProcess, QProcessEnvironment
 
 import idc
 import idaapi
@@ -76,6 +61,7 @@ from idaapi import PluginForm
 
 # get PYTHON_PATH settings, based on platform
 PYTHON_PATH = rsconfig.get_python_interpreter()
+os.environ['PYTHON_PATH'] = PYTHON_PATH
 
 # default value is current script's path
 BROKER_PATH = os.path.join(os.path.normpath(os.path.dirname(__file__)), rsconfig.PLUGIN_DIR, 'broker.py')
@@ -83,7 +69,7 @@ if not os.path.exists(BROKER_PATH):
     rs_log("[-] broker path is not properly set, current value: <%s>" % BROKER_PATH)
     raise RuntimeError
 
-IDB_PATH = os.path.dirname(os.path.realpath(idaapi.get_path(idaapi.PATH_TYPE_IDB)))
+os.environ['IDB_PATH'] = os.path.dirname(os.path.realpath(idaapi.get_path(idaapi.PATH_TYPE_IDB)))
 
 COL_CBTRACE = rsconfig.COL_CBTRACE
 
@@ -721,32 +707,26 @@ class RequestHandler(object):
         self.notice_broker("cmd", "\"cmd\":\"%s\"" % cmd)
         rs_debug("translate address 0x%x" % ea)
 
-    # send a go command (Alt-F5) to the debugger (via the broker and dispatcher)
-    def go_notice(self):
+    # send a command to the debugger (via the broker and dispatcher)
+    def cmd_notice(self, cmd, descr):
         if not self.is_active:
-            rs_log("idb isn't enabled, can't go")
+            rs_log("idb isn't enabled, can't %s" % descr)
             return
 
-        self.notice_broker("cmd", "\"cmd\":\"%s\"" % self.dbg_dialect['go'])
+        self.notice_broker("cmd", "\"cmd\":\"%s\"" % self.dbg_dialect[cmd])
         self.notice_anti_flood()
+
+    # send a go command (Alt-F5) to the debugger (via the broker and dispatcher)
+    def go_notice(self):
+        self.cmd_notice('go', descr='go')
 
     # send a single trace command (F11) to the debugger (via the broker and dispatcher)
     def si_notice(self):
-        if not self.is_active:
-            rs_log("idb isn't enabled, can't trace")
-            return
-
-        self.notice_broker("cmd", "\"cmd\":\"%s\"" % self.dbg_dialect['si'])
-        self.notice_anti_flood()
+        self.cmd_notice('si', descr='trace')
 
     # send a single step command (F10) to the debugger (via the broker and dispatcher)
     def so_notice(self):
-        if not self.is_active:
-            rs_log("idb isn't enabled, can't single step")
-            return
-
-        self.notice_broker("cmd", "\"cmd\":\"%s\"" % self.dbg_dialect['so'])
-        self.notice_anti_flood()
+        self.cmd_notice('so', descr='step')
 
     # send a notice message to the broker process
     def notice_broker(self, type, args=None):
@@ -995,15 +975,10 @@ class SyncForm_t(PluginForm):
                   modname)
         rs_log("cmdline: %s" % cmdline)
 
-        self.broker = Broker(self.parser)
-        env = QProcessEnvironment.systemEnvironment()
-        env.insert("IDB_PATH", IDB_PATH)
-        env.insert("PYTHON_PATH", PYTHON_PATH)
-
         try:
+            self.broker = Broker(self.parser)
             self.broker.started.connect(self.cb_broker_started)
             self.broker.finished.connect(self.cb_broker_finished)
-            self.broker.setProcessEnvironment(env)
             self.broker.start(cmdline)
         except Exception as e:
             rs_log("[-] failed to start broker: %s\n%s" % (str(e), traceback.format_exc()))
@@ -1115,31 +1090,20 @@ class SyncForm_t(PluginForm):
             rs_log("hint: pdb name ('%s') differs from registered module name ('%s')" % (pdb_root+mod_ext, name))
 
     # discover the name used to expose the idb, default is from get_root_filename
-    # may be alias with '.sync' conf file, local or from user's home
+    # alias can be defined in '.sync' configuration file
     def handle_name_aliasing(self):
         name = idaapi.get_root_filename()
         rs_log("default idb name: %s" % name)
 
-        # check in conf for name aliasing
-        os.environ['IDB_PATH'] = os.path.realpath(IDB_PATH)
-        for loc in ('IDB_PATH', 'USERPROFILE', 'HOME'):
-            if loc in os.environ:
-                try:
-                    confpath = os.path.join(os.path.realpath(os.environ[loc]), '.sync')
-                    if os.path.exists(confpath):
-                        rs_log("found config file: %s" % confpath)
-                        config = ConfigParser()
-                        config.read(confpath)
-
-                        if config.has_option('ALIASES', name):
-                            alias = config.get('ALIASES', name)
-                            if alias != "":
-                                name = alias
-                                rs_log("overwrite idb name with %s" % name)
-
-                        break
-                except Exception as e:
-                    rs_log('failed to load configuration file')
+        try:
+            conf = load_configuration(name)
+            if conf.path:
+                rs_log("found config file: %s" % repr(conf))
+            if conf.alias:
+                name = conf.alias
+                rs_log("overwrite idb name with %s" % name)
+        except Exception as e:
+            rs_log('failed to load configuration file')
 
         self.pdb_name_warning(name)
         return name

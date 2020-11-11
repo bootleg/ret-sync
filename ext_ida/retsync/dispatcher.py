@@ -29,26 +29,13 @@ import time
 import socket
 import select
 import re
+import json
 import traceback
 from contextlib import contextmanager
-try:
-    from ConfigParser import SafeConfigParser
-except ImportError:
-    from configparser import ConfigParser as SafeConfigParser
-
-try:
-    import json
-except ImportError:
-    print("[-] failed to import json\n%s" % repr(sys.exc_info()))
-    sys.exit(0)
 
 import rsconfig
-from rsconfig import rs_encode, rs_decode
+from rsconfig import rs_encode, rs_decode, load_configuration
 
-
-# Networking
-HOST = rsconfig.HOST
-PORT = rsconfig.PORT
 
 # Logging
 rs_log = rsconfig.init_logging(__file__)
@@ -492,24 +479,13 @@ def error_reporting(stage, info=None):
 
 
 if __name__ == "__main__":
-
     server = DispatcherSrv()
 
     with error_reporting('server.config'):
-        for loc in ('IDB_PATH', 'USERPROFILE', 'HOME'):
-            if loc in os.environ:
-                confpath = os.path.join(os.path.realpath(os.environ[loc]), '.sync')
-                if os.path.exists(confpath):
-                    config = SafeConfigParser({'host': HOST, 'port': PORT})
-                    config.read(confpath)
-                    if config.has_section('INTERFACE'):
-                        HOST = config.get('INTERFACE', 'host')
-                        PORT = config.getint('INTERFACE', 'port')
-                    server.announcement('configuration file loaded')
-                    break
+        rs_cfg = load_configuration()
 
-    with error_reporting('server.bind', '(%s:%s)' % (HOST, PORT)):
-        server.bind(HOST, PORT)
+    with error_reporting('server.bind', '(%s:%s)' % (rs_cfg.host, rs_cfg.port)):
+        server.bind(rs_cfg.host, rs_cfg.port)
 
     with error_reporting('server.loop'):
         server.loop()

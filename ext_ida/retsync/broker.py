@@ -30,18 +30,8 @@ import argparse
 import subprocess
 import socket
 import select
+import json
 from contextlib import contextmanager
-
-try:
-    from ConfigParser import SafeConfigParser
-except ImportError:
-    from configparser import ConfigParser as SafeConfigParser
-
-try:
-    import json
-except ImportError:
-    print("[-] failed to import json\n%s" % repr(sys.exc_info()))
-    sys.exit(0)
 
 # python 2.7 compat
 try:
@@ -50,11 +40,8 @@ except ImportError:
     DEVNULL = open(os.devnull, 'wb')
 
 import rsconfig
-from rsconfig import rs_encode, rs_decode
+from rsconfig import rs_encode, rs_decode, load_configuration
 
-# Networking
-HOST = rsconfig.HOST
-PORT = rsconfig.PORT
 
 # Logging
 rs_log = rsconfig.init_logging(__file__)
@@ -125,12 +112,12 @@ class BrokerSrv():
         time.sleep(0.2)
         return pid
 
-    def notify(self):
+    def notify(self, port):
         for attempt in range(rsconfig.RUN_DISPATCHER_MAX_ATTEMPT):
             try:
                 self.notify_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.notify_socket.settimeout(2)
-                self.notify_socket.connect(('127.0.0.1', PORT))
+                self.notify_socket.connect(('127.0.0.1', port))
                 break
             except socket.error:
                 self.notify_socket.close()
@@ -301,22 +288,13 @@ if __name__ == "__main__":
         server.name = args.idb[0]
 
     with error_reporting('server.config'):
-        for loc in ('IDB_PATH', 'USERPROFILE', 'HOME'):
-            if loc in os.environ:
-                confpath = os.path.join(os.path.realpath(os.environ[loc]), '.sync')
-                if os.path.exists(confpath):
-                    config = SafeConfigParser({'port': PORT, 'host': HOST})
-                    config.read(confpath)
-                    if config.has_section('INTERFACE'):
-                        PORT = config.getint('INTERFACE', 'port')
-                        HOST = config.get('INTERFACE', 'host')
-                    break
+        rs_cfg = load_configuration()
 
     with error_reporting('server.bind'):
         server.bind()
 
     with error_reporting('server.notify'):
-        server.notify()
+        server.notify(rs_cfg.port)
 
     with error_reporting('server.loop'):
         server.loop()

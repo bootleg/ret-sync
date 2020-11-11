@@ -86,9 +86,8 @@ And the disassembler plugins:
 
 # General prerequisites
 
-IDA and GDB plugins require a valid Python setup. Python 2 and Python 3 are
-supported. ``argparse`` module is also needed, it is included by default in
-Python standard libraries for releases 2.7 and newer.
+IDA and GDB plugins require a valid Python setup. Python 2 (>=2.7) and Python
+3 are supported.
 
 
 # Binary release
@@ -961,6 +960,6 @@ along with this program.  If not, see http://www.gnu.org/licenses/.
 Hail to Bruce Dang, StalkR, @Ivanlef0u, Damien Aumaître, Sébastien Renaud and
 Kévin Szkudlapski, @_m00dy_, @saidelike, Xavier Mehrenberger, ben64, Raphaël
 Rigo, Jiss for their kindness, help, feedbacks and thoughts. Ilfak Guilfanov,
-Igor Skochinsky and Arnaud Diederen for their help with IDA's internals and 
-outstanding support. Finally, thank you also to all the contributors and 
+Igor Skochinsky and Arnaud Diederen for their help with IDA's internals and
+outstanding support. Finally, thank you also to all the contributors and
 everyone who reported issues/bugs.

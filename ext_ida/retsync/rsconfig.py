@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2019, Alexandre Gazet.
+# Copyright (C) 2019-2020, Alexandre Gazet.
 #
 # This file is part of ret-sync.
 #
@@ -22,6 +22,12 @@ import sys
 import tempfile
 import logging
 from logging.handlers import RotatingFileHandler
+from collections import namedtuple
+
+try:
+    from ConfigParser import SafeConfigParser
+except ImportError:
+    from configparser import ConfigParser as SafeConfigParser
 
 try:
     import distutils.spawn
@@ -62,6 +68,25 @@ COL_CBTRACE = COL_GREEN
 COL_BLANK_HEX = COL_BLANK
 COL_CURLINE_HEX = COL_YLW
 COL_PREVLINE_HEX = COL_YLW_LIGHT
+
+# encoding settings (for data going in/out the plugin)
+RS_ENCODING = 'utf-8'
+
+# debugging settings
+# enable/disable logging JSON received in the IDA output window
+DEBUG_JSON = False
+
+# global log level (console output)
+LOG_LEVEL = logging.INFO
+
+# log prefix to identify plugin
+LOG_PREFIX = 'sync'
+
+# enable/disable broker and dipatcher exception logging to file
+LOG_TO_FILE_ENABLE = False
+
+# logging feature for broker and dispatcher (disabled by default)
+LOG_FMT_STRING = '%(asctime)-12s [%(levelname)s] %(message)s'
 
 # dialects to translate debugger commands (breakpoint, step into/over, etc.)
 DBG_DIALECTS = {
@@ -105,23 +130,6 @@ DBG_DIALECTS = {
 }
 
 
-# debugging settings
-# enable/disable logging JSON received in the IDA output window
-DEBUG_JSON = False
-
-# global log level (console output)
-LOG_LEVEL = logging.INFO
-
-# log prefix to identify plugin
-LOG_PREFIX = 'sync'
-
-# enable/disable broker and dipatcher exception logging to file
-LOG_TO_FILE_ENABLE = False
-
-# logging feature for broker and dispatcher (disabled by default)
-LOG_FMT_STRING = '%(asctime)-12s [%(levelname)s] %(message)s'
-
-
 def init_logging(src):
     logging.basicConfig(level=logging.DEBUG)
     name = os.path.basename(src)
@@ -150,10 +158,6 @@ def rs_log(s, lvl=logging.INFO):
 
 def rs_debug(s):
     rs_log(s, logging.DEBUG)
-
-
-# encoding settings (for data going in/out the plugin)
-RS_ENCODING = 'utf-8'
 
 
 def rs_encode(buffer_str):
@@ -229,3 +233,31 @@ def get_python_interpreter():
            "       please fix PYTHON_PATH/PYTHON_BIN in %s/rsconfig.py\n" % PLUGIN_DIR)
 
     raise RuntimeError
+
+
+# this function is used by the main plugin, the broker and the dispatcher
+def load_configuration(name=None):
+    user_conf = namedtuple('user_conf', 'host port alias path')
+    host, port, alias, path = HOST, PORT, None, None
+
+    for loc in ('IDB_PATH', 'USERPROFILE', 'HOME'):
+        if loc in os.environ:
+            confpath = os.path.join(os.path.realpath(os.environ[loc]), '.sync')
+
+            if os.path.exists(confpath):
+                config = SafeConfigParser({'host': HOST, 'port': PORT})
+                config.read(confpath)
+
+                if config.has_section('INTERFACE'):
+                    host = config.get('INTERFACE', 'host')
+                    port = config.getint('INTERFACE', 'port')
+
+                if name and config.has_option('ALIASES', name):
+                    alias_ = config.get('ALIASES', name)
+                    if alias_ != "":
+                        alias = alias_
+
+                path = confpath
+                break
+
+    return user_conf(host, port, alias, path)
