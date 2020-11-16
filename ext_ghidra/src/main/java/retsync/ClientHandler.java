@@ -70,6 +70,7 @@ public class ClientHandler implements Runnable {
                 plugin.clrs.cbColorFinal();
             }
         } finally {
+            plugin.clrs.stopEnhancedDecompHighlight();
             plugin.uiComponent.resetClient();
         }
     }

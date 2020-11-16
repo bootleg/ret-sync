@@ -39,19 +39,21 @@ package retsync;
 
 import java.awt.Color;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
 
+import docking.widgets.EventTrigger;
+import docking.widgets.fieldpanel.field.Field;
+import docking.widgets.fieldpanel.support.FieldLocation;
 import ghidra.app.decompiler.ClangLine;
+import ghidra.app.decompiler.ClangSyntaxToken;
 import ghidra.app.decompiler.ClangToken;
-import ghidra.app.decompiler.ClangTokenGroup;
-import ghidra.app.decompiler.component.ClangLayoutController;
-import ghidra.app.decompiler.component.DecompilerUtils;
+import ghidra.app.decompiler.component.ClangTextField;
+import ghidra.app.decompiler.component.DecompilerPanel;
+import ghidra.app.decompiler.component.LocationClangHighlightController;
+import ghidra.app.plugin.core.decompile.DecompilerActionContext;
+import ghidra.app.plugin.core.decompile.DecompilerProvider;
 import ghidra.app.util.viewer.listingpanel.PropertyBasedBackgroundColorModel;
 import ghidra.program.database.IntRangeMap;
 import ghidra.program.model.address.Address;
-import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.listing.Program;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.exception.DuplicateNameException;
@@ -64,7 +66,7 @@ public class LocalColorizerService {
     private Boolean cbTraceEnabled = false;
     private Address cbPrevAddr = null;
     private Color cbrevColor = null;
-
+    private DecompilerPanel dpanel = null;
     private Program program;
 
     LocalColorizerService(RetSyncPlugin plugin) {
@@ -161,32 +163,6 @@ public class LocalColorizerService {
         }
     }
 
-    // enhance highlight in decompiler (full line)
-    public void enhancedDecompHighlight(Address addr) {
-        ClangLayoutController clc = (ClangLayoutController) rsplugin.dhs.getLayoutModel();
-        ClangTokenGroup root = clc.getRoot();
-        AddressSet locs = new AddressSet(addr);
-        List<ClangToken> tokens = DecompilerUtils.getTokens(root, locs);
-
-        // collect ClangLine
-        HashSet<ClangLine> lines = new HashSet<ClangLine>();
-        tokens.forEach((tok) -> {
-            ClangLine lineParent = tok.getLineParent();
-            lines.add(lineParent);
-        });
-
-        // apply highlight for each collected line
-        lines.forEach((line) -> {
-            ArrayList<ClangToken> ltoks = line.getAllTokens();
-            if (ltoks != null) {
-                ltoks.forEach((token) -> {
-                    if (token != null)
-                        token.setHighlight(SYNC_CURLINE);
-                });
-            }
-        });
-    }
-
     /*
      ***************************************************************************
      *
@@ -238,6 +214,94 @@ public class LocalColorizerService {
             }
         }
         return map;
+    }
+
+    /*
+     ***************************************************************************
+     *
+     * Decompiler highlight enhancement option: full line instead of token based
+     * highlighting can be disable in configuration file: enhanced_highlight option
+     * of the GHIDRA section
+     *
+     ***************************************************************************
+     */
+
+    private void getDecompilerPanel() {
+        DecompilerProvider dprov = null;
+        DecompilerActionContext context = null;
+
+        dprov = (DecompilerProvider) rsplugin.getTool().getComponentProvider("Decompiler");
+        if (dprov != null) {
+            context = (DecompilerActionContext) dprov.getActionContext(null);
+            if (context != null) {
+                dpanel = context.getDecompilerPanel();
+            }
+        }
+    }
+
+    // set up FullLineLocationClangHighlightController (full line highlight)
+    protected void startEnhancedDecompHighlight() {
+        if (!rsplugin.bUseEnhancedHighlight)
+            return;
+
+        if (dpanel == null) {
+            getDecompilerPanel();
+
+            if (dpanel != null) {
+                FullLineLocationClangHighlightController highlightController;
+                highlightController = new FullLineLocationClangHighlightController();
+                dpanel.setHighlightController(highlightController);
+            }
+        }
+    }
+
+    // restore LocationClangHighlightController (token highlight)
+    protected void stopEnhancedDecompHighlight() {
+        if (!rsplugin.bUseEnhancedHighlight)
+            return;
+
+        if (dpanel != null) {
+            LocationClangHighlightController highlightController = new LocationClangHighlightController();
+            dpanel.setHighlightController(highlightController);
+            dpanel = null;
+        }
+    }
+
+    private class FullLineLocationClangHighlightController extends LocationClangHighlightController {
+
+        @Override
+        public void fieldLocationChanged(FieldLocation location, Field field, EventTrigger trigger) {
+
+            clearPrimaryHighlights();
+
+            if (!(field instanceof ClangTextField)) {
+                return;
+            }
+
+            ClangToken loctok = ((ClangTextField) field).getToken(location);
+            if (loctok == null) {
+                return;
+            }
+
+            if (trigger == EventTrigger.GUI_ACTION) {
+                addTokenPrimaryHighlight(loctok);
+            } else {
+                ClangLine cline = loctok.getLineParent();
+                if (cline != null) {
+                    cline.getAllTokens().forEach((tok) -> {
+                        addTokenPrimaryHighlight(tok);
+                    });
+                }
+            }
+        }
+
+        private void addTokenPrimaryHighlight(ClangToken token) {
+            addPrimaryHighlight(token, defaultHighlightColor);
+            if (token instanceof ClangSyntaxToken) {
+                addPrimaryHighlightToTokensForParenthesis((ClangSyntaxToken) token, defaultParenColor);
+                addHighlightBrace((ClangSyntaxToken) token, defaultParenColor);
+            }
+        }
     }
 
 }

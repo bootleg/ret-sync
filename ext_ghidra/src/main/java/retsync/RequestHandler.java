@@ -152,6 +152,7 @@ public class RequestHandler {
                     dialect = "unknown";
 
                 rsplugin.uiComponent.setConnected(dialect);
+                rsplugin.clrs.startEnhancedDecompHighlight();
                 rsplugin.cs.println(String.format("             dialect: %s", dialect));
                 break;
 
@@ -159,6 +160,7 @@ public class RequestHandler {
             case "dbg_quit":
                 rsplugin.cs.println(String.format("[<] %s", notice.getString("msg")));
                 rsplugin.clrs.cbColorFinal();
+                rsplugin.clrs.stopEnhancedDecompHighlight();
                 rsplugin.uiComponent.resetClient();
                 rsplugin.syncEnabled = false;
                 rsplugin.program = null;

@@ -41,7 +41,6 @@ import ghidra.app.cmd.comments.AppendCommentCmd;
 import ghidra.app.cmd.comments.SetCommentCmd;
 import ghidra.app.cmd.function.SetFunctionRepeatableCommentCmd;
 import ghidra.app.cmd.label.AddLabelCmd;
-import ghidra.app.decompiler.component.DecompilerHighlightService;
 import ghidra.app.events.ProgramActivatedPluginEvent;
 import ghidra.app.events.ProgramClosedPluginEvent;
 import ghidra.app.plugin.PluginCategoryNames;
@@ -76,8 +75,7 @@ import ghidra.program.util.ProgramLocation;
                 ProgramManager.class,
                 ConsoleService.class,
                 CodeViewerService.class,
-                GoToService.class,
-                DecompilerHighlightService.class},
+                GoToService.class },
         eventsConsumed = {
                 ProgramActivatedPluginEvent.class,
                 ProgramClosedPluginEvent.class }
@@ -93,7 +91,6 @@ public class RetSyncPlugin extends ProgramPlugin {
     CodeViewerService cvs;
     ProgramManager pm;
     LocalColorizerService clrs;
-    DecompilerHighlightService dhs;
 
     // client handling
     ListenerBackground server;
@@ -119,6 +116,7 @@ public class RetSyncPlugin extends ProgramPlugin {
     protected String SYNC_HOST = SYNC_HOST_DEFAULT;
     protected int SYNC_PORT = SYNC_PORT_DEFAULT;
     protected HashMap<String, String> aliases = new HashMap<String, String>();
+    protected boolean bUseEnhancedHighlight = true;
 
     public RetSyncPlugin(PluginTool tool) {
         super(tool, true, true);
@@ -136,7 +134,6 @@ public class RetSyncPlugin extends ProgramPlugin {
         gs = tool.getService(GoToService.class);
         pm = tool.getService(ProgramManager.class);
         cvs = tool.getService(CodeViewerService.class);
-        dhs = tool.getService(DecompilerHighlightService.class);
         clrs = new LocalColorizerService(this);
 
         loadConfiguration();
@@ -320,6 +317,13 @@ public class RetSyncPlugin extends ProgramPlugin {
                 }
             }
 
+            Section secGhidra = config.get("GHIDRA");
+            if (secGhidra != null) {
+                boolean enhanced_highlight = Boolean.valueOf(secGhidra.getOrDefault("enhanced_highlight", "true"));
+                cs.println(String.format("  - enhanced highlight: %s", enhanced_highlight));
+                bUseEnhancedHighlight = enhanced_highlight;
+            }
+
             found = true;
         } catch (IOException e) {
             cs.println(String.format("[>] failed to parse conf file: %s", e.getMessage()));
@@ -411,7 +415,6 @@ public class RetSyncPlugin extends ProgramPlugin {
         if (dest != null) {
             gs.goTo(dest);
             clrs.setPrevAddr(dest);
-            clrs.enhancedDecompHighlight(dest);
         }
     }
 
