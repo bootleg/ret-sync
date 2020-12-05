@@ -43,17 +43,6 @@ import rsconfig
 from rsconfig import rs_encode, rs_decode, load_configuration
 
 
-# Logging
-rs_log = rsconfig.init_logging(__file__)
-
-
-# default value is current script's path
-DISPATCHER_PATH = os.path.join(os.path.realpath(os.path.dirname(__file__)), 'dispatcher.py')
-if not os.path.exists(DISPATCHER_PATH):
-    print("[-] dispatcher path is not properly set, current value: <%s>" % DISPATCHER_PATH)
-    sys.exit(0)
-
-
 class Client():
 
     def __init__(self, s):
@@ -96,7 +85,12 @@ class BrokerSrv():
         self.srv_port = self.srv_sock.getsockname()[1]
 
     def run_dispatcher(self):
-        cmdline = "\"%s\" -u \"%s\"" % (PYTHON_PATH, DISPATCHER_PATH)
+        script_path = os.path.join(os.path.realpath(os.path.dirname(__file__)), 'dispatcher.py')
+        if not os.path.exists(script_path):
+            msg = "dispatcher not found, should be in: %s" % script_path
+            self.err_log(msg)
+
+        cmdline = "\"%s\" -u \"%s\"" % (PYTHON_PATH, script_path)
         tokenizer = shlex.shlex(cmdline)
         tokenizer.whitespace_split = True
         args = [arg.replace('\"', '') for arg in list(tokenizer)]
@@ -275,6 +269,7 @@ def error_reporting(stage, info=None):
 
 if __name__ == "__main__":
 
+    rs_log = rsconfig.init_logging(__file__)
     server = BrokerSrv()
 
     with error_reporting('server.env', 'PYTHON_PATH not found'):
