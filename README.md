@@ -2,7 +2,7 @@
 
 **ret-sync** stands for Reverse-Engineering Tools SYNChronization. It is a set
 of plugins that help to synchronize a debugging session
-(WinDbg/GDB/LLDB/OllyDbg/OllyDbg2/x64dbg) with a disassembler (IDA/Ghidra).
+(WinDbg/GDB/LLDB/OllyDbg/OllyDbg2/x64dbg) with a disassembler (IDA/Ghidra/Binary Ninja).
 The underlying idea is simple: take the best from both worlds (static and
 dynamic analysis).
 
@@ -44,6 +44,7 @@ that I developed and maintained during my stay at
 - [Installation](#installation)
   - [IDA extension](#ida-extension)
   - [Ghidra extension](#ghidra-extension)
+  - [Binary Ninja extension](#binary-ninja-extension)
   - [WinDbg extension](#windbg-extension)
   - [GNU gdb (GDB) installation](#gnu-gdb-gdb-installation)
   - [LLDB installation](#lldb-installation)
@@ -54,6 +55,7 @@ that I developed and maintained during my stay at
   - [**ret-sync** debugger commands](#ret-sync-debugger-commands)
   - [IDA usage](#ida-usage)
   - [Ghidra usage](#ghidra-usage)
+  - [Binary Ninja usage](#binary-ninja-usage)
   - [WinDbg usage](#windbg-usage)
   - [GNU gdb (GDB) usage](#gnu-gdb-gdb-usage)
   - [LLDB usage](#lldb-usage)
@@ -82,6 +84,7 @@ And the disassembler plugins:
 
 * `ext_ida/SyncPlugin.py`
 * `ext_ghidra/dist/ghidra_*_retsync.zip`: Ghidra plugin
+* `ext_bn/retsync`: Binary Ninja plugin
 
 
 # General prerequisites
@@ -322,6 +325,35 @@ A status window is also available from ``Windows`` -> ``RetSyncPlugin``. You
 generally want to drop it on the side to integrate it with the Ghidra
 environment windows.
 
+
+## Binary Ninja extension
+
+Binary Ninja support is experimental, make sure to backup your analysis
+databases.
+
+### Binary Ninja prerequisites
+
+**ret-sync** requires Binary Ninja version 2.2 at minimum as well as Python 3
+(Python 2 is not supported).
+
+
+### Install the Binary Ninja extension
+
+**ret-sync** is not yet distributed through the Binary Ninja's Plugin Manager;
+a manual installation is required. Simply copy that content of the `ext_bn`
+folder into Binary Ninja's plugins folder, for example:
+
+`%APPDATA%\Binary Ninja\plugins`
+
+After restarting Binary Ninja, the following output should be present in the
+console window:
+
+```
+[sync] commands added
+Loaded python3 plugin 'retsync'
+```
+
+
 ## WinDbg extension
 
 ### Build the WinDbg extension
@@ -537,9 +569,9 @@ As a reminder it is possible to alias by default using the ``.sync`` configurati
 Two buttons are also available in the Debug toolbar to toggle global and
 Hex-Rays syncing.
 
-### IDA bindings over WinDbg commands
+### IDA bindings over debugger commands
 
-``Syncplugin.py`` also registers WinDbg command wrapper hotkeys.
+``Syncplugin.py`` also registers debugger command wrapper hotkeys.
 
 * ``F2`` - Set breakpoint at cursor address
 * ``F3`` - Set one-shot breakpoint at cursor address
@@ -575,7 +607,7 @@ the result as above.
 * ``Alt-R``  - Restart syncing
 * ``Alt-Shift-R``  - Reload configuration
 
-### Ghidra bindings over WinDbg
+### Ghidra bindings over debugger commands
 
 Bindings over debugger commands are also implemented. They are similar to the
 ones from IDA's extension (except the "Go" command).
@@ -588,6 +620,32 @@ ones from IDA's extension (except the "Go" command).
 * ``F5`` - Go
 * ``F10`` - Single step
 * ``F11`` - Single trace
+
+
+## Binary Ninja usage
+
+### Binary Ninja global shortcuts
+
+**ret-sync** defines these global shortcuts in Binary Ninja:
+
+* ``Alt-S``  - Enable syncing
+* ``Alt-Shift-S``  - Disable syncing
+
+
+### Binary Ninja shortcuts
+
+Bindings over debugger commands are also implemented. They are similar to the
+ones from IDA's extension.
+
+* ``F2``  - Set breakpoint at cursor address
+* ``Ctrl-F2`` - Set hardware breakpoint at cursor address
+* ``Alt-F3`` - Set one-shot breakpoint at cursor address
+* ``Ctrl-F3`` - Set one-shot hardware breakpoint at cursor address
+* ``Alt-F2`` - Translate (rebase in debugger) current cursor address
+* ``Alt-F5`` - Go
+* ``F10`` - Single step
+* ``F11`` - Single trace
+
 
 ## WinDbg usage
 
@@ -918,7 +976,7 @@ While mostly focus on dynamic analysis, it is of-course possible to use other to
 
 # Known Bugs/Limitations
 
-- Tested with Python 2.7/3.7, IDA 7.4SP1 (Windows, Linux and Mac OS X), Ghidra 9.1.2, GNU gdb (GDB) 8.1.0 (Debian), lldb 310.2.37.
+- Tested with Python 2.7/3.7, IDA 7.5 (Windows, Linux and Mac OS X), Ghidra 9.2, Binary Ninja 2.2.2487, GNU gdb (GDB) 8.1.0 (Debian), lldb 310.2.37.
 - **THERE IS NO AUTHENTICATION/ENCRYPTION** whatsoever between the parties; you're on your own.
 - Self modifying code is out of scope.
 
@@ -940,6 +998,7 @@ With IDA:
 - Graph window redrawing is quite slow for big graphs.
 - **ret-sync** shortcuts conflicts in Linux environments.
 
+
 # License
 
 **ret-sync** is free software: you can redistribute it and/or modify
@@ -955,11 +1014,14 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see http://www.gnu.org/licenses/.
 
+The Binary Ninja plugin is released under the MIT licence.
+
+
 # Greetz
 
 Hail to Bruce Dang, StalkR, @Ivanlef0u, Damien Aumaître, Sébastien Renaud and
 Kévin Szkudlapski, @_m00dy_, @saidelike, Xavier Mehrenberger, ben64, Raphaël
 Rigo, Jiss for their kindness, help, feedbacks and thoughts. Ilfak Guilfanov,
 Igor Skochinsky and Arnaud Diederen for their help with IDA's internals and
-outstanding support. Finally, thank you also to all the contributors and
-everyone who reported issues/bugs.
+outstanding support. Thank you to Jordan Wiens and Vector 35. Finally, thank
+you also to all the contributors and everyone who reported issues/bugs.
