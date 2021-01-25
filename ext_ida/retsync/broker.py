@@ -107,6 +107,7 @@ class BrokerSrv():
         return pid
 
     def notify(self, port):
+        self.dispatcher_port = port
         for attempt in range(rsconfig.RUN_DISPATCHER_MAX_ATTEMPT):
             try:
                 self.notify_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -176,7 +177,8 @@ class BrokerSrv():
     # idb is checking if broker has received beacon from dispatcher
     def req_beacon(self, s, hash):
         if not self.beaconed:
-            self.announcement('beacon not received (possible dispatcher error)')
+            self.announcement("beacon not received (this may be dispatcher error, "
+                              "tip: please check that the port %d is available )" % self.dispatcher_port)
             self.req_kill(s, hash)
 
     def parse_exec(self, s, req):
@@ -247,6 +249,7 @@ class BrokerSrv():
 
     def __init__(self):
         self.name = None
+        self.dispatcher_port = None
         self.beaconed = False
         self.opened_sockets = []
         self.clients_list = []
