@@ -709,10 +709,6 @@ class RequestHandler(object):
 
     # send a command to the debugger (via the broker and dispatcher)
     def cmd_notice(self, cmd, descr):
-        if not self.is_active:
-            rs_log("idb isn't enabled, can't %s" % descr)
-            return
-
         self.notice_broker("cmd", "\"cmd\":\"%s\"" % self.dbg_dialect[cmd])
         self.notice_anti_flood()
 
