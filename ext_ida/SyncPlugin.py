@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016-2020, Alexandre Gazet.
+# Copyright (C) 2016-2021, Alexandre Gazet.
 #
 # Copyright (C) 2012-2015, Quarkslab.
 #
@@ -560,6 +560,7 @@ class RequestHandler(object):
 
         elif(subtype == 'disable_idb'):
             self.is_active = False
+            self.base_remote = None
             self.cb_restore_last_line()
             rs_log('idb is disabled')
 
@@ -673,6 +674,14 @@ class RequestHandler(object):
             rs_log("idb isn't synced yet, can't export bp")
             return
 
+        is_windbg = (self.dbg_dialect == 'windbg')
+
+        # Windbg supports relative address, ie. mod+0xCAFE
+        # for non relative address the remote base address is needed
+        if (not is_windbg) and (not self.base_remote):
+            rs_log("idb isn't enabled, can't export bp")
+            return
+
         mod = self.name.split('.')[0].strip()
         nbp = ida_dbg.get_bpt_qty()
 
@@ -687,9 +696,15 @@ class RequestHandler(object):
                 if ((btype in [idc.BPT_EXEC, idc.BPT_SOFT]) and
                    ((flags & idc.BPT_ENABLED) != 0)):
 
-                    offset = ea - self.base
                     bp = self.dbg_dialect['hbp' if (btype == idc.BPT_EXEC) else 'bp']
-                    cmd = "%s%s+0x%x" % (bp, mod, offset)
+
+                    if is_windbg:
+                        offset = ea - self.base
+                        cmd = "%s%s+0x%x" % (bp, mod, offset)
+                    else:
+                        offset = self.rebase_remote(ea)
+                        cmd = "%s0x%x" % (bp, offset)
+
                     self.notice_broker("cmd", "\"cmd\":\"%s\"" % cmd)
                     rs_log("bp %d: %s" % (i, cmd))
 
