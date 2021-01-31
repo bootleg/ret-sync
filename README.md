@@ -998,6 +998,16 @@ With IDA:
 - Graph window redrawing is quite slow for big graphs.
 - **ret-sync** shortcuts conflicts in Linux environments.
 
+Conflict(s):
+
+- Logitech Updater software is known to use the same default port (9100). A solution
+  is to use a global `.sync` configuration file to define a different port.
+
+```
+[INTERFACE]
+host=127.0.0.1
+port=9234
+```
 
 # License
 
