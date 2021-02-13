@@ -948,6 +948,7 @@ Due to the beta status of OllyDbg2 API, only the following features have been im
 [sync] extension commands help:
  > !sync                          = synchronize with <host from conf> or the default value
  > !syncoff                       = stop synchronization
+ > !syncmodauto <on | off>        = enable / disable idb auto switch based on module name
  > !synchelp                      = display this help
  > !cmt <string>                  = add comment at current eip in IDA
  > !rcmt <string>                 = reset comments at current eip in IDA

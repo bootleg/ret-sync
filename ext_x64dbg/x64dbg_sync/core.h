@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2016-2020, Alexandre Gazet.
+Copyright (C) 2016-2021, Alexandre Gazet.
 
 Copyright (C) 2014-2015, Quarkslab.
 
@@ -38,6 +38,7 @@ enum MENU_IDENTIFIERS {
 //functions
 HRESULT sync(PSTR Args);
 HRESULT syncoff();
+HRESULT syncmodauto(PSTR Args);
 HRESULT synchelp();
 HRESULT idblist();
 HRESULT cmt(PSTR Args);

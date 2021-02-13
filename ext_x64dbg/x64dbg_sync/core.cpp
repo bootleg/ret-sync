@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2016-2020, Alexandre Gazet.
+Copyright (C) 2016-2021, Alexandre Gazet.
 
 Copyright (C) 2014-2015, Quarkslab.
 
@@ -153,7 +153,7 @@ UpdateState()
 #endif
 
 	// Check if we are in a new module
-	if ((g_Base != PrevBase) & g_SyncAuto)
+	if ((g_Base != PrevBase) && g_SyncAuto)
 	{
 		hProcess = DbgGetProcessHandle();
 
@@ -202,7 +202,7 @@ PollCmd()
 
 	hRes = TunnelPoll(&NbBytesRecvd, &msg);
 
-	if (SUCCEEDED(hRes) & (NbBytesRecvd > 0) & (msg != NULL))
+	if (SUCCEEDED(hRes) && (NbBytesRecvd > 0) && (msg != NULL))
 	{
 		orig = msg;
 
@@ -457,6 +457,7 @@ HRESULT synchelp()
 	_plugin_logputs("[sync] extension commands help:\n"
 		" > !sync                          = synchronize with <host from conf> or the default value\n"
 		" > !syncoff                       = stop synchronization\n"
+		" > !syncmodauto <on | off>        = enable / disable idb auto switch based on module name\n"
 		" > !synchelp                      = display this help\n"
 		" > !cmt <string>                  = add comment at current eip in IDA\n"
 		" > !rcmt <string>                 = reset comments at current eip in IDA\n"
@@ -464,6 +465,44 @@ HRESULT synchelp()
 		" > !idb <module name>             = set given module as the active idb (see !idblist)\n"
 		" > !idbn <n>                      = set active idb to the n_th client. n should be a valid decimal value\n"
 		" > !translate <base> <addr> <mod> = rebase an address with respect to local module's base\n\n");
+
+	return hRes;
+}
+
+
+HRESULT syncmodauto(PSTR Args)
+{
+	HRESULT hRes = S_OK;
+	char* param = NULL;
+	char* context = NULL;
+
+	// strip command and trailing whitespaces
+	strtok_s(Args, " ", &param);
+	strtok_s(param, " ", &context);
+
+	if (param != NULL)
+	{
+		if (strcmp("on", param) == 0)
+		{
+			g_SyncAuto = true;
+			goto LBL_NOTICE;
+		}
+		else if (strcmp("off", param) == 0)
+		{
+			g_SyncAuto = false;
+			goto LBL_NOTICE;
+		}
+	}
+
+	_plugin_logputs("[sync] !syncmodauto parameter should be in <on|off> \n");
+	return E_FAIL;
+
+LBL_NOTICE:
+	hRes = TunnelSend("[notice]{\"type\":\"sync_mode\",\"auto\":\"%s\"}\n", param);
+	if (FAILED(hRes)) {
+		_plugin_logputs("[sync] !syncmodauto failed to send notice\n");
+		return E_FAIL;
+	}
 
 	return hRes;
 }
@@ -485,7 +524,7 @@ HRESULT idblist()
 	}
 
 	hRes = TunnelReceive(&NbBytesRecvd, &msg);
-	if (SUCCEEDED(hRes) & (NbBytesRecvd > 0) & (msg != NULL)) {
+	if (SUCCEEDED(hRes) && (NbBytesRecvd > 0) && (msg != NULL)) {
 		_plugin_logputs(msg);
 		free(msg);
 	}
@@ -769,6 +808,23 @@ static bool cbSyncoffCommand(int argc, char* argv[])
 }
 
 
+static bool cbSyncmodautoCommand(int argc, char* argv[])
+{
+#if VERBOSE >= 2
+	_plugin_logputs("[sync] syncmodauto command!");
+#endif
+
+	if (strlen(argv[0]) < _countof("!syncmodauto")) {
+		_plugin_logputs("[sync] !syncmodauto missing parameter (<on|off>)\n");
+		return false;
+	}
+
+	_plugin_logputs("[sync] syncmodauto command!");
+	syncmodauto((PSTR)argv[0]);
+	return true;
+}
+
+
 static bool cbSynchelpCommand(int argc, char* argv[])
 {
 	_plugin_logputs("[sync] synchelp command!");
@@ -960,6 +1016,9 @@ void coreInit(PLUG_INITSTRUCT* initStruct)
 	if (!_plugin_registercommand(pluginHandle, "!syncoff", cbSyncoffCommand, true))
 		_plugin_logputs("[sync] error registering the \"!syncoff\" command!");
 
+	if (!_plugin_registercommand(pluginHandle, "!syncmodauto", cbSyncmodautoCommand, true))
+		_plugin_logputs("[sync] error registering the \"!syncmodauto\" command!");
+
 	if (!_plugin_registercommand(pluginHandle, "!synchelp", cbSynchelpCommand, false))
 		_plugin_logputs("[sync] error registering the \"!synchelp\" command!");
 
@@ -1011,6 +1070,7 @@ void coreStop()
 	_plugin_unregistercommand(pluginHandle, "!sync");
 	_plugin_unregistercommand(pluginHandle, "!syncoff");
 	_plugin_unregistercommand(pluginHandle, "!synchelp");
+	_plugin_unregistercommand(pluginHandle, "!syncmodauto");
 	_plugin_unregistercommand(pluginHandle, "!idblist");
 	_plugin_unregistercommand(pluginHandle, "!idbn");
 	_plugin_unregistercommand(pluginHandle, "!idb");

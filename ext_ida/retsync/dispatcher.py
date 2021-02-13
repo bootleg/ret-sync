@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016-2020, Alexandre Gazet.
+# Copyright (C) 2016-2021, Alexandre Gazet.
 #
 # Copyright (C) 2012-2015, Quarkslab.
 #
@@ -445,8 +445,11 @@ class DispatcherSrv():
     # sync mode tells if idb switch is automatic or manual
     def req_sync_mode(self, s, hash):
         mode = hash['auto']
-        self.broadcast("sync mode auto set to %s" % mode)
-        self.sync_mode_auto = (mode == 'on')
+        if mode in ['on', 'off']:
+            self.broadcast("sync mode auto set to %s" % mode)
+            self.sync_mode_auto = (mode == 'on')
+        else:
+            self.broadcast("sync mode auto invalid param %s" % mode)
 
     # bc request should be forwarded to all idbs
     def req_bc(self, s, hash):
