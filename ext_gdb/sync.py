@@ -321,7 +321,11 @@ class Poller(threading.Thread):
             if self.evt_stop.is_set():
                 break
 
-            self.evt_enabled.wait()
+            while True:
+                if self.evt_enabled.wait(2*TIMER_PERIOD):
+                    break
+                if not self.interpreter_alive():
+                    return
 
             if not self.sync.tunnel:
                 break
@@ -330,6 +334,9 @@ class Poller(threading.Thread):
                 self.poll()
 
             time.sleep(TIMER_PERIOD)
+
+    def interpreter_alive(self):
+        return threading.main_thread().is_alive()
 
     def poll(self):
         msg = self.sync.tunnel.poll()
@@ -383,11 +390,11 @@ class Sync(gdb.Command):
         self.offset = None
         self.tunnel = None
         self.poller = None
+
         gdb.events.exited.connect(self.exit_handler)
         gdb.events.cont.connect(self.cont_handler)
         gdb.events.stop.connect(self.stop_handler)
         gdb.events.new_objfile.connect(self.newobj_handler)
-        gdb.events.new_thread.connect(self.newthread_handler)
 
         for cmd in commands:
             cmd(self)
@@ -466,9 +473,6 @@ class Sync(gdb.Command):
             self.poller.stop()
             self.poller = None
 
-    def newthread_handler(self, event):
-        self.create_poll_timer()
-
     def newobj_handler(self, event):
         # force a new capture
         self.maps = None
@@ -521,10 +525,7 @@ class Sync(gdb.Command):
             id = self.identity()
             self.tunnel.send("[notice]{\"type\":\"new_dbg\",\"msg\":\"dbg connect - %s\",\"dialect\":\"gdb\"}\n" % id)
             rs_log("sync is now enabled with host %s" % str(arg))
-
-            # make sure there is an active thread before running the Poller
-            if gdb.selected_thread():
-                self.create_poll_timer()
+            self.create_poll_timer()
         else:
             print('(update)')
 
