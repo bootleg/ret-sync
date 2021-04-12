@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016-2020, Alexandre Gazet.
+# Copyright (C) 2016-2021, Alexandre Gazet.
 #
 # Copyright (C) 2012-2014, Quarkslab.
 #
@@ -81,143 +81,146 @@ def rs_log(s, lvl=logging.INFO):
         print("%s[%s]%s %s" % (LOG_COLOR_ON, LOG_PREFIX, LOG_COLOR_OFF, s))
 
 
-# function show_last_exception courtesy of saidelike
-# exception handler to ease commands debug
-def show_last_exception(cmd):
-    horizontal_line = "-"
-    right_arrow = "->"
-    down_arrow = "\\->"
+class DbgHelp():
 
-    print("")
-    exc_type, exc_value, exc_traceback = sys.exc_info()
-    print(" Exception raised in {} command".format(cmd).center(80, horizontal_line))
-    print("{}: {}".format(exc_type.__name__, exc_value))
-    print(" Detailed stacktrace ".center(80, horizontal_line))
-    for fs in traceback.extract_tb(exc_traceback)[::-1]:
-        if PYTHON_MAJOR == 2:
-            filename, lineno, method, code = fs
-        else:
-            filename, lineno, method, code = fs.filename, fs.lineno, fs.name, fs.line
+    # function show_last_exception courtesy of saidelike
+    # exception handler to ease commands debug
+    @staticmethod
+    def show_last_exception(cmd):
+        horizontal_line = "-"
+        right_arrow = "->"
+        down_arrow = "\\->"
 
-        print("""{} File "{}", line {:d}, in {}()""".format(down_arrow, filename,
-                                                            lineno, method))
-        print("   {}    {}\n".format(right_arrow, code))
-
-
-# function gdb_execute courtesy of StalkR
-# Wrapper when gdb.execute(cmd, to_string=True) does not work
-def gdb_execute(cmd, use_tmp_logging_file=True):
-    if not use_tmp_logging_file:
-        return gdb.execute(cmd, to_string=True)
-    f = tempfile.NamedTemporaryFile()
-    gdb.execute("set logging file %s" % f.name)
-    gdb.execute("set logging redirect on")
-    gdb.execute("set logging overwrite")
-    gdb.execute("set logging on")
-
-    try:
-        gdb.execute(cmd)
-    except Exception as e:
-        gdb.execute("set logging off")
-        f.close()
-        raise e
-
-    gdb.execute("set logging off")
-    s = open(f.name, "r").read()
-    f.close()
-    return s
-
-
-def get_pid(ctx=None):
-    if (ctx is not None) and ("pid" in ctx.keys()):
-        return ctx["pid"]
-
-    for inf in gdb.inferiors():
-        # if Inferior.threads() is an empty tuple
-        # the program being debugged is not being run.
-        if inf.is_valid() and inf.threads():
-            return inf.pid
-
-    print("get_pid(): failed to find program's pid")
-    return None
-
-
-def coalesce_space(maps, next_start, next_name):
-    if len(maps) == 0:
-        return False
-
-    start, end, size, name = maps[-1]
-
-    # contiguous spaces
-    if (end == next_start) and (name == next_name):
-        return True
-
-    return False
-
-
-def get_maps(cfg):
-    "Return list of maps (start, end, permissions, file name) via /proc"
-
-    if (cfg.ctx is not None) and ("mappings" in cfg.ctx.keys()):
-        return cfg.ctx["mappings"]
-
-    pid = get_pid(ctx=cfg.ctx)
-    if pid is None:
-        return []
-
-    maps = []
-    mapping = gdb_execute('info proc mappings', cfg.use_tmp_logging_file)
-
-    try:
-        for line in mapping.splitlines():
-            e = [x for x in line.strip().split() if x != '']
-            if (not e) or (len(e) < 5):
-                continue
+        print("")
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        print(" Exception raised in {} command".format(cmd).center(80, horizontal_line))
+        print("{}: {}".format(exc_type.__name__, exc_value))
+        print(" Detailed stacktrace ".center(80, horizontal_line))
+        for fs in traceback.extract_tb(exc_traceback)[::-1]:
+            if PYTHON_MAJOR == 2:
+                filename, lineno, method, code = fs
             else:
-                if not e[0].startswith('0x'):
-                    continue
+                filename, lineno, method, code = fs.filename, fs.lineno, fs.name, fs.line
 
-                name = (' ').join(e[4:])
-                e = e[:4] + [name]
-                start, end, size, offset, name = e
+            print("""{} File "{}", line {:d}, in {}()""".format(down_arrow, filename,
+                                                                lineno, method))
+            print("   {}    {}\n".format(right_arrow, code))
 
-                new_entry = [int(start, 16), int(end, 16), int(size, 16), name]
+    # function gdb_execute courtesy of StalkR
+    # Wrapper when gdb.execute(cmd, to_string=True) does not work
+    @staticmethod
+    def gdb_execute(cmd, use_tmp_logging_file=True):
+        if not use_tmp_logging_file:
+            return gdb.execute(cmd, to_string=True)
+        f = tempfile.NamedTemporaryFile()
+        gdb.execute("set logging file %s" % f.name)
+        gdb.execute("set logging redirect on")
+        gdb.execute("set logging overwrite")
+        gdb.execute("set logging on")
 
-                if coalesce_space(maps, new_entry[0], name):
-                    maps[-1][1] = new_entry[1]
-                    maps[-1][2] += new_entry[2]
-                else:
-                    maps.append(new_entry)
+        try:
+            gdb.execute(cmd)
+        except Exception as e:
+            gdb.execute("set logging off")
+            f.close()
+            raise e
 
-    except Exception as e:
-        print(e)
-        rs_log("failed to parse info proc mappings")
+        gdb.execute("set logging off")
+        s = open(f.name, "r").read()
+        f.close()
+        return s
 
-    return maps
+    @staticmethod
+    def get_pid(ctx=None):
+        if (ctx is not None) and ("pid" in ctx.keys()):
+            return ctx["pid"]
 
+        for inf in gdb.inferiors():
+            # if Inferior.threads() is an empty tuple
+            # the program being debugged is not being run.
+            if inf.is_valid() and inf.threads():
+                return inf.pid
 
-def get_mod_by_addr(maps, addr):
-    for mod in maps:
-        if (addr > mod[0]) and (addr < mod[1]):
-            return [mod[0], mod[3]]
-    return None
-
-
-def get_mod_by_name(maps, name):
-    for mod in maps:
-        if os.path.basename(mod[3]) == os.path.basename(name):
-            return [mod[0], mod[3]]
-    return None
-
-
-def get_pc():
-    try:
-        pc_str = str(gdb.parse_and_eval("$pc"))
-    except Exception as e:
-        # debugger may not be running: 'No registers':
+        print("get_pid(): failed to find program's pid")
         return None
 
-    return int((pc_str.split(" ")[0]), 16)
+    @staticmethod
+    def coalesce_space(maps, next_start, next_name):
+        if len(maps) == 0:
+            return False
+
+        start, end, size, name = maps[-1]
+
+        # contiguous spaces
+        if (end == next_start) and (name == next_name):
+            return True
+
+        return False
+
+    @staticmethod
+    def get_maps(cfg):
+        "Return list of maps (start, end, permissions, file name) via /proc"
+
+        if (cfg.ctx is not None) and ("mappings" in cfg.ctx.keys()):
+            return cfg.ctx["mappings"]
+
+        pid = DbgHelp.get_pid(ctx=cfg.ctx)
+        if pid is None:
+            return []
+
+        maps = []
+        mapping = DbgHelp.gdb_execute('info proc mappings', cfg.use_tmp_logging_file)
+
+        try:
+            for line in mapping.splitlines():
+                e = [x for x in line.strip().split() if x != '']
+                if (not e) or (len(e) < 5):
+                    continue
+                else:
+                    if not e[0].startswith('0x'):
+                        continue
+
+                    name = (' ').join(e[4:])
+                    e = e[:4] + [name]
+                    start, end, size, offset, name = e
+
+                    new_entry = [int(start, 16), int(end, 16), int(size, 16), name]
+
+                    if DbgHelp.coalesce_space(maps, new_entry[0], name):
+                        maps[-1][1] = new_entry[1]
+                        maps[-1][2] += new_entry[2]
+                    else:
+                        maps.append(new_entry)
+
+        except Exception as e:
+            print(e)
+            rs_log("failed to parse info proc mappings")
+
+        return maps
+
+    @staticmethod
+    def get_mod_by_addr(maps, addr):
+        for mod in maps:
+            if (addr > mod[0]) and (addr < mod[1]):
+                return [mod[0], mod[3]]
+        return None
+
+    @staticmethod
+    def get_mod_by_name(maps, name):
+        for mod in maps:
+            if os.path.basename(mod[3]) == os.path.basename(name):
+                return [mod[0], mod[3]]
+        return None
+
+    @staticmethod
+    def get_pc():
+        try:
+            pc_str = str(gdb.parse_and_eval("$pc"))
+        except Exception as e:
+            # debugger may not be running: 'No registers':
+            return None
+
+        return int((pc_str.split(" ")[0]), 16)
 
 
 class Tunnel():
@@ -321,20 +324,24 @@ class Poller(threading.Thread):
             if self.evt_stop.is_set():
                 break
 
-            while True:
-                if self.evt_enabled.wait(2*TIMER_PERIOD):
-                    break
-                if not self.interpreter_alive():
-                    return
+            if not self.evt_enabled.is_set():
+                while True:
+                    if self.evt_enabled.wait(2*TIMER_PERIOD):
+                        break
+                    if not self.interpreter_alive():
+                        return
 
+            if not self.interpreter_alive():
+                return
             if not self.sync.tunnel:
-                break
+                return
 
             if self.sync.tunnel.is_up():
                 self.poll()
 
             time.sleep(TIMER_PERIOD)
 
+    # "the main thread is the thread from which the Python interpreter was started"
     def interpreter_alive(self):
         return threading.main_thread().is_alive()
 
@@ -374,7 +381,7 @@ class WrappedCommand(gdb.Command):
         try:
             self._invoke(arg, from_tty)
         except Exception as e:
-            show_last_exception(self.__class__.__name__)
+            DbgHelp.show_last_exception(self.__class__.__name__)
 
 
 class Sync(gdb.Command):
@@ -409,23 +416,23 @@ class Sync(gdb.Command):
 
     def ensure_maps_loaded(self):
         if not self.maps:
-            self.maps = get_maps(self.cfg)
+            self.maps = DbgHelp.get_maps(self.cfg)
             if not self.maps:
                 rs_log("failed to get proc mappings")
                 return None
 
     def mod_info(self, addr):
         self.ensure_maps_loaded()
-        return get_mod_by_addr(self.maps, addr)
+        return DbgHelp.get_mod_by_addr(self.maps, addr)
 
     def locate(self):
-        offset = get_pc()
+        offset = DbgHelp.get_pc()
         if not offset:
             rs_log("<not running>")
             return
 
         if not self.pid:
-            self.pid = get_pid(ctx=self.cfg.ctx)
+            self.pid = DbgHelp.get_pid(ctx=self.cfg.ctx)
             if self.pid is None:
                 return
 
@@ -627,12 +634,12 @@ class Idbn(WrappedCommand):
 
         rs_log(msg)
         modname = msg.split('"')[1]
-        maps = get_maps(self.sync.cfg)
+        maps = DbgHelp.get_maps(self.sync.cfg)
 
         if not maps:
             return 'failed to get program mappings'
 
-        mod_info = get_mod_by_name(maps, modname)
+        mod_info = DbgHelp.get_mod_by_name(maps, modname)
 
         if not mod_info:
             return ("failed to locate module \"%s\"" % modname)
@@ -653,13 +660,13 @@ class Idb(WrappedCommand):
             rs_log("usage: idb <module name>")
             return
 
-        maps = get_maps(self.sync.cfg)
+        maps = DbgHelp.get_maps(self.sync.cfg)
         if not maps:
             rs_log("failed to get program mappings")
             return
 
         mod_name = arg.strip()
-        mod_info = get_mod_by_name(maps, mod_name)
+        mod_info = DbgHelp.get_mod_by_name(maps, mod_name)
         if not mod_info:
             rs_log("failed to locate module %s" % mod_name)
             return
@@ -679,7 +686,7 @@ class Modlist(WrappedCommand):
         gdb.Command.__init__(self, "modlist", gdb.COMMAND_RUNNING, gdb.COMPLETE_NONE)
 
     def _invoke(self, arg, from_tty):
-        print(gdb_execute('info proc mappings', self.sync.cfg.use_tmp_logging_file))
+        print(DbgHelp.gdb_execute('info proc mappings', self.sync.cfg.use_tmp_logging_file))
 
 
 class Cmt(WrappedCommand):
@@ -727,12 +734,12 @@ class Translate(WrappedCommand):
 
     def _invoke(self, arg, from_tty):
         base, address, module = [a.strip() for a in arg.split(" ")]
-        maps = get_maps(self.sync.cfg)
+        maps = DbgHelp.get_maps(self.sync.cfg)
         if not maps:
             rs_log("failed to get program mappings")
             return None
 
-        mod = get_mod_by_name(maps, module)
+        mod = DbgHelp.get_mod_by_name(maps, module)
         if not mod:
             rs_log("failed to locate module %s" % module)
             return None
@@ -771,7 +778,7 @@ class Cmd(WrappedCommand):
             rs_log("usage: cmd <command to execute and dump>")
             return
 
-        cmd_output = rs_encode(gdb_execute(arg, self.sync.cfg.use_tmp_logging_file))
+        cmd_output = rs_encode(DbgHelp.gdb_execute(arg, self.sync.cfg.use_tmp_logging_file))
         b64_output = rs_decode(base64.b64encode(cmd_output))
         self.sync.tunnel.send("[sync] {\"type\":\"cmd\",\"msg\":\"%s\", \"base\":%d,\"offset\":%d}\n" % (b64_output, self.sync.base, self.sync.offset))
         rs_log("command output:\n%s" % cmd_output.strip())
@@ -1052,7 +1059,7 @@ def load_configuration():
                         rs_log("initialization context:\n%s\n" % json.dumps(ctx, indent=4))
                     except Exception as e:
                         rs_log('failed to parse [INIT] section from .sync configuration file')
-                        show_last_exception('eval')
+                        DbgHelp.show_last_exception('eval')
 
             break
 
