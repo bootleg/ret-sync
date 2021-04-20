@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2019-2020, Alexandre Gazet.
+# Copyright (C) 2019-2021, Alexandre Gazet.
 #
 # This file is part of ret-sync.
 #
@@ -104,6 +104,7 @@ DBG_DIALECTS = {
         'si': 'si',
         'so': 'ni',
         'go': 'continue',
+        'run': 'run',
         'bp': 'b *',
         'hbp': 'hb *',
         'bp1': 'tb *',

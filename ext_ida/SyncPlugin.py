@@ -724,12 +724,19 @@ class RequestHandler(object):
 
     # send a command to the debugger (via the broker and dispatcher)
     def cmd_notice(self, cmd, descr):
-        self.notice_broker("cmd", "\"cmd\":\"%s\"" % self.dbg_dialect[cmd])
-        self.notice_anti_flood()
+        if cmd in self.dbg_dialect:
+            self.notice_broker("cmd", "\"cmd\":\"%s\"" % self.dbg_dialect[cmd])
+            self.notice_anti_flood()
+        else:
+            rs_log("the \"%s\" command is not available for the current debugger" % cmd)
 
     # send a go command (Alt-F5) to the debugger (via the broker and dispatcher)
     def go_notice(self):
         self.cmd_notice('go', descr='go')
+
+    # send a go command (Ctrl-Alt-F5) to the debugger (via the broker and dispatcher)
+    def run_notice(self):
+        self.cmd_notice('run', descr='run')
 
     # send a single trace command (F11) to the debugger (via the broker and dispatcher)
     def si_notice(self):
@@ -995,7 +1002,6 @@ class SyncForm_t(PluginForm):
             rs_log("[-] failed to start broker: %s\n%s" % (str(e), traceback.format_exc()))
             return
 
-        self.init_hotkeys()
         self.broker.worker.name = modname
 
     def init_hotkeys(self):
@@ -1009,6 +1015,7 @@ class SyncForm_t(PluginForm):
             ('Ctrl-F3', self.broker.worker.hbp_oneshot_notice),
             ('Alt-F2', self.broker.worker.translate_notice, 'ManualInstruction'),
             ('Alt-F5', self.broker.worker.go_notice),
+            ('Ctrl-Alt-F5', self.broker.worker.run_notice),
         )
 
         if not self.hotkeys_ctx:

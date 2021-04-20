@@ -579,6 +579,7 @@ Hex-Rays syncing.
 * ``Ctrl-F3`` - Set one-shot hardware breakpoint at cursor address
 * ``Alt-F2`` - Translate (rebase in debugger) current cursor address
 * ``Alt-F5`` - Go
+* ``Ctrl-Alt-F5`` - Run (GDB only)
 * ``F10`` - Single step
 * ``F11`` - Single trace
 
