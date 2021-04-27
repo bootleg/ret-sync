@@ -967,10 +967,15 @@ command line).
 
 # Extend
 
-While mostly focus on dynamic analysis, it is of-course possible to use other tools, see:
+While initially focused on dynamic analysis (debuggers), it is of-course
+possible to extend the plugins set and integrate with other tools.
 
-- http://blog.tetrane.com/2015/02/reven-in-your-toolkit.html
-
+- Integration with **REVEN** Timeless Analysis and Debugging Platform by [Tetrane](https://www.tetrane.com/):
+  - http://blog.tetrane.com/2015/02/reven-in-your-toolkit.html
+  - https://twitter.com/tetrane/status/1374768014193799175
+- Integration with **EFI DXE Emulator** by Assaf Carlsbad ([@assaf_carlsbad](https://twitter.com/assaf_carlsbad)):
+  - https://twitter.com/assaf_carlsbad/status/1242114356881641474
+  - https://github.com/assafcarlsbad/efi_dxe_emulator
 
 # TODO
 
