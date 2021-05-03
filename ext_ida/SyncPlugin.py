@@ -598,21 +598,21 @@ class RequestHandler(object):
             self.prev_req = req
             return
 
-        type = hash['type']
-        if type not in self.req_handlers:
-            rs_log("unknown request: %s" % type)
+        rtype = hash['type']
+        if rtype not in self.req_handlers:
+            rs_log("unknown request: %s" % rtype)
             return
 
-        req_handler = self.req_handlers[type]
+        req_handler = self.req_handlers[rtype]
 
         # few requests are handled even though idb is not enable
-        if type in ['broker', 'dialect', 'bc']:
+        if rtype in ['broker', 'dialect', 'bc']:
             req_handler(hash)
         else:
             if self.is_active:
                 req_handler(hash)
             else:
-                rs_debug("[-] Drop the %s request because idb is not enabled" % type)
+                rs_debug("[-] Drop the %s request because idb is not enabled" % rtype)
                 return
 
         idaapi.refresh_idaview_anyway()
@@ -828,8 +828,8 @@ class Broker(QtCore.QProcess):
 
     def cb_broker_on_out(self):
         # readAllStandardOutput() returns QByteArray
-        buffer = rs_decode(self.readAllStandardOutput().data())
-        batch = buffer.split('\n')
+        data = rs_decode(self.readAllStandardOutput().data())
+        batch = data.split('\n')
         for req in batch:
             self.worker.parse_exec(req.strip())
 
