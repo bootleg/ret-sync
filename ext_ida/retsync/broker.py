@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016-2020, Alexandre Gazet.
+# Copyright (C) 2016-2021, Alexandre Gazet.
 #
 # Copyright (C) 2012-2015, Quarkslab.
 #
@@ -62,7 +62,7 @@ class Client():
 class BrokerSrv():
 
     def puts(self, msg):
-        print(msg)
+        sys.stdout.buffer.write(rs_encode(msg + '\n'))
         sys.stdout.flush()
 
     def announcement(self, msg):
