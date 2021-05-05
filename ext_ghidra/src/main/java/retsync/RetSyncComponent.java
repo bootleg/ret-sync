@@ -67,6 +67,7 @@ public class RetSyncComponent extends ComponentProvider {
     private CodeViewerContextAction action_trace;
     private CodeViewerContextAction action_step;
     private CodeViewerContextAction action_go;
+    private CodeViewerContextAction action_run;
     private CodeViewerContextAction action_bp;
     private CodeViewerContextAction action_bp1;
     private CodeViewerContextAction action_hbp;
@@ -118,7 +119,7 @@ public class RetSyncComponent extends ComponentProvider {
         panel.add(programArea, gbc);
     }
 
-    private CodeViewerContextAction codeViewerActionFactory(String name, String cmd, int key) {
+    private CodeViewerContextAction codeViewerActionFactory(String name, String cmd, KeyBindingData keyBinding) {
         CodeViewerContextAction action;
 
         action = new CodeViewerContextAction(name, getName()) {
@@ -138,9 +139,13 @@ public class RetSyncComponent extends ComponentProvider {
         };
 
         action.setEnabled(true);
-        action.setKeyBindingData(new KeyBindingData(key, 0));
+        action.setKeyBindingData(keyBinding);
         action.setHelpLocation(new HelpLocation(HelpTopics.NAVIGATION, action.getName()));
         return action;
+    }
+
+    private CodeViewerContextAction codeViewerActionFactory(String name, String cmd, int key) {
+        return codeViewerActionFactory(name, cmd, new KeyBindingData(key, 0));
     }
 
     private CodeViewerContextAction breakPointActionFactory(String name, String cmd, boolean oneshot,
@@ -263,6 +268,10 @@ public class RetSyncComponent extends ComponentProvider {
         action_go = codeViewerActionFactory("ret-sync-go", "go", KeyEvent.VK_F5);
         action_go.setDescription("Run program");
         dockingTool.addAction(action_go);
+
+        action_run = codeViewerActionFactory("ret-sync-run", "run", new KeyBindingData(KeyEvent.VK_F5, InputEvent.ALT_DOWN_MASK));
+        action_run.setDescription("Run program (gdb run)");
+        dockingTool.addAction(action_run);
 
         action_bp = breakPointActionFactory("ret-sync-bp", "bp", false, new KeyBindingData(KeyEvent.VK_F2, 0));
         action_bp.setDescription("Set breakpoint");
