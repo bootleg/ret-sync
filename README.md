@@ -619,6 +619,7 @@ ones from IDA's extension (except the "Go" command).
 * ``Ctrl-F3`` - Set one-shot hardware breakpoint at cursor address
 * ``Alt-F2`` - Translate (rebase in debugger) current cursor address
 * ``F5`` - Go
+* ``Alt-F5`` - Run (GDB only)
 * ``F10`` - Single step
 * ``F11`` - Single trace
 
@@ -977,6 +978,12 @@ possible to extend the plugins set and integrate with other tools.
   - https://twitter.com/assaf_carlsbad/status/1242114356881641474
   - https://github.com/assafcarlsbad/efi_dxe_emulator
 
+Other resource(s):
+
+- "*Combining static and dynamic binary analysis - ret-sync*" by Jean-Christophe Delaunay
+  - https://www.synacktiv.com/ressources/bieresecu1_ret-sync_en.pdf
+
+
 # TODO
 
 - Sure.
@@ -999,6 +1006,10 @@ With WinDbg:
   if there are too much of these events. A limited fix has been implemented, the
   best solution is still to sync off temporarily.
 - Possible race condition
+
+With Ghidra:
+
+- Shortcuts are not working as expected in decompiler widget.
 
 With IDA:
 
