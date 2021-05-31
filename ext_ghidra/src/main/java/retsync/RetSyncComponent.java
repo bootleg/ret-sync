@@ -40,8 +40,8 @@ import docking.ComponentProvider;
 import docking.action.DockingAction;
 import docking.action.KeyBindingData;
 import docking.action.ToolBarData;
-import ghidra.app.plugin.core.codebrowser.CodeViewerActionContext;
-import ghidra.app.plugin.core.codebrowser.actions.CodeViewerContextAction;
+import ghidra.app.context.NavigatableActionContext;
+import ghidra.app.context.NavigatableContextAction;
 import ghidra.app.util.HelpTopics;
 import ghidra.framework.plugintool.Plugin;
 import ghidra.program.model.address.Address;
@@ -64,16 +64,16 @@ public class RetSyncComponent extends ComponentProvider {
     private DockingAction action_disable;
     private DockingAction action_refresh;
 
-    private CodeViewerContextAction action_trace;
-    private CodeViewerContextAction action_step;
-    private CodeViewerContextAction action_go;
-    private CodeViewerContextAction action_run;
-    private CodeViewerContextAction action_bp;
-    private CodeViewerContextAction action_bp1;
-    private CodeViewerContextAction action_hbp;
-    private CodeViewerContextAction action_hbp1;
-    private CodeViewerContextAction action_translate;
-    private CodeViewerContextAction action_reload_conf;
+    private NavigatableContextAction action_trace;
+    private NavigatableContextAction action_step;
+    private NavigatableContextAction action_go;
+    private NavigatableContextAction action_run;
+    private NavigatableContextAction action_bp;
+    private NavigatableContextAction action_bp1;
+    private NavigatableContextAction action_hbp;
+    private NavigatableContextAction action_hbp1;
+    private NavigatableContextAction action_translate;
+    private NavigatableContextAction action_reload_conf;
 
     private static final Color COLOR_CONNECTED = new Color(0, 153, 0);
 
@@ -119,12 +119,12 @@ public class RetSyncComponent extends ComponentProvider {
         panel.add(programArea, gbc);
     }
 
-    private CodeViewerContextAction codeViewerActionFactory(String name, String cmd, KeyBindingData keyBinding) {
-        CodeViewerContextAction action;
+    private NavigatableContextAction codeViewerActionFactory(String name, String cmd, KeyBindingData keyBinding) {
+        NavigatableContextAction action;
 
-        action = new CodeViewerContextAction(name, getName()) {
+        action = new NavigatableContextAction(name, getName()) {
             @Override
-            public void actionPerformed(CodeViewerActionContext context) {
+            public void actionPerformed(NavigatableActionContext context) {
                 if (bDebugAction) {
                     rsplugin.cs.println(String.format("[>] %s", this.getFullName()));
                 }
@@ -144,16 +144,16 @@ public class RetSyncComponent extends ComponentProvider {
         return action;
     }
 
-    private CodeViewerContextAction codeViewerActionFactory(String name, String cmd, int key) {
+    private NavigatableContextAction codeViewerActionFactory(String name, String cmd, int key) {
         return codeViewerActionFactory(name, cmd, new KeyBindingData(key, 0));
     }
 
-    private CodeViewerContextAction breakPointActionFactory(String name, String cmd, boolean oneshot,
+    private NavigatableContextAction breakPointActionFactory(String name, String cmd, boolean oneshot,
             KeyBindingData keyBinding) {
-        CodeViewerContextAction breakpoint_action;
-        breakpoint_action = new CodeViewerContextAction(name, getName()) {
+        NavigatableContextAction breakpoint_action;
+        breakpoint_action = new NavigatableContextAction(name, getName()) {
             @Override
-            public void actionPerformed(ActionContext context) {
+            public void actionPerformed(NavigatableActionContext context) {
                 rsplugin.cs.println(String.format("[>] %s", this.getName()));
 
                 if (rsplugin.syncEnabled) {
@@ -229,9 +229,9 @@ public class RetSyncComponent extends ComponentProvider {
         action_refresh.setToolBarData(new ToolBarData(Icons.REFRESH_ICON, null));
         dockingTool.addAction(action_refresh);
 
-        action_translate = new CodeViewerContextAction("ret-sync translate", getName()) {
+        action_translate = new NavigatableContextAction("ret-sync translate", getName()) {
             @Override
-            public void actionPerformed(ActionContext context) {
+            public void actionPerformed(NavigatableActionContext context) {
                 rsplugin.cs.println(String.format("[>] %s", this.getName()));
 
                 if (rsplugin.syncEnabled) {
@@ -248,9 +248,9 @@ public class RetSyncComponent extends ComponentProvider {
             }
         };
 
-        action_reload_conf = new CodeViewerContextAction("ret-sync reload conf", getName()) {
+        action_reload_conf = new NavigatableContextAction("ret-sync reload conf", getName()) {
             @Override
-            public void actionPerformed(ActionContext context) {
+            public void actionPerformed(NavigatableActionContext context) {
                 rsplugin.cs.println(String.format("[>] %s", this.getName()));
                 rsplugin.defaultConfiguration();
                 rsplugin.loadConfiguration();
