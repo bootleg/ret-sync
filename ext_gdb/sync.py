@@ -888,7 +888,7 @@ class Bx(WrappedCommand):
         except Exception as e:
             pass
         else:
-            gdb.execute("x %s %s" % fmt, sym)
+            gdb.execute("x %s %s" % (fmt, sym))
             return
 
         # XXX - split symbol+offset in case "+" is found in sym
