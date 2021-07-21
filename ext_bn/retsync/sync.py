@@ -23,6 +23,13 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+import binaryninjaui
+if 'qt_major_version' in binaryninjaui.__dict__ and binaryninjaui.qt_major_version == 6:
+    from PySide6 import QtCore
+    from PySide6.QtCore import Qt
+else:
+    from PySide2 import QtCore
+    from PySide2.QtCore import Qt
 
 from binaryninjaui import DockHandler
 from binaryninjaui import UIAction, UIActionHandler, UIContext, UIContextNotification
@@ -30,8 +37,6 @@ from binaryninjaui import ViewFrame
 
 from binaryninja.plugin import BackgroundTaskThread, PluginCommand
 
-from PySide2 import QtCore
-from PySide2.QtCore import Qt
 
 from collections import OrderedDict
 import socket
