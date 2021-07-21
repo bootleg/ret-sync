@@ -35,9 +35,10 @@ else:
     from PySide2.QtCore import Qt
     from PySide2.QtGui import QKeySequence
 
+from binaryninjaui import UIAction, UIActionHandler
+
 from .sync import SyncPlugin
 from .retsync.rsconfig import rs_log
-from binaryninjaui import UIAction, UIActionHandler
 
 
 def add_commands(plugin):
