@@ -26,8 +26,14 @@ SOFTWARE.
 
 from collections import namedtuple
 
-from PySide2.QtCore import Qt
-from PySide2.QtGui import QKeySequence
+import binaryninjaui
+if 'qt_major_version' in binaryninjaui.__dict__ and binaryninjaui.qt_major_version == 6:
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QKeySequence
+else:
+    from PySide2.QtCore import Qt
+    from PySide2.QtGui import QKeySequence
+
 from binaryninjaui import UIAction, UIActionHandler
 
 from .sync import SyncPlugin
