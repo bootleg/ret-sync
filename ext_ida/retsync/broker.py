@@ -62,8 +62,8 @@ class Client():
 class BrokerSrv():
 
     def puts(self, msg):
-        sys.stdout.buffer.write(rs_encode(msg + '\n'))
-        sys.stdout.flush()
+        self.stdout.write(rs_encode(msg + '\n'))
+        self.stdout.flush()
 
     def announcement(self, msg):
         self.puts("[sync]{\"type\":\"broker\",\"subtype\":\"msg\",\"msg\":\"%s\"}\n" % msg)
@@ -249,6 +249,7 @@ class BrokerSrv():
 
     def __init__(self):
         self.name = None
+        self.stdout = getattr(sys.stdout, 'buffer', sys.stdout)
         self.dispatcher_port = None
         self.beaconed = False
         self.opened_sockets = []
