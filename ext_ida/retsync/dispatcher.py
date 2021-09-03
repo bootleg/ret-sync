@@ -276,7 +276,6 @@ class DispatcherSrv():
             client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             client_sock.settimeout(2)
             client_sock.connect(('localhost', port))
-            self.opened_socks.append(client_sock)
         except socket.error:
             self.opened_socks.remove(srv_sock)
             srv_sock.close()
@@ -313,7 +312,6 @@ class DispatcherSrv():
         # remove exiting client from the list of active clients
         for idbc in [idbc for idbc in self.idb_clients if (idbc.srv_sock == s)]:
             self.idb_clients.remove(idbc)
-            self.opened_socks.remove(idbc.client_sock)
             idbc.close()
 
             # no more clients, let's kill ourself
