@@ -109,6 +109,16 @@ DBG_DIALECTS = {
         'hbp': 'hb *',
         'bp1': 'tb *',
         'hbp1': 'thb *'},
+    'lldb': {
+        'prefix': '',
+        'si': 'si',
+        'so': 'ni',
+        'go': 'continue',
+        'run': 'run',
+        'bp': 'b *',
+        'hbp': 'xxxx *',
+        'bp1': 'tb *',
+        'hbp1': 'xxxx *'},
     'ollydbg2': {
         'prefix': '',
         'si': 'si',
