@@ -1,6 +1,6 @@
 /*
 
-Copyright (C) 2019-2020, Alexandre Gazet.
+Copyright (C) 2019-2021, Alexandre Gazet.
 
 This file is part of ret-sync.
 
@@ -55,6 +55,19 @@ public class DebuggerDialects {
                     entry("hbp1", "thb *")
                     ));
 
+    private static final HashMap<String, String> LLDB_DIALECT = new HashMap<String, String>(
+            Map.ofEntries(
+                    entry("prefix", ""),
+                    entry("si", "si"),
+                    entry("so", "ni"),
+                    entry("go", "continue"),
+                    entry("run", "run"),
+                    entry("bp", "b *"),
+                    entry("hbp", "xxx"),
+                    entry("bp1", "tb *"),
+                    entry("hbp1", "xxx")
+                    ));
+
     private static final HashMap<String, String> OLLYDBG_DIALECT = new HashMap<String, String>(
             Map.ofEntries(
                     entry("prefix", ""),
@@ -84,6 +97,7 @@ public class DebuggerDialects {
             Map.ofEntries(
                     entry("windbg", WINDBG_DIALECT),
                     entry("gdb", GDB_DIALECT),
+                    entry("lldb", LLDB_DIALECT),
                     entry("ollydbg2", OLLYDBG_DIALECT),
                     entry("x64_dbg", X64DBG_DIALECT)
                     ));
