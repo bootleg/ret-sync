@@ -172,7 +172,7 @@ class DispatcherSrv():
         try:
             data = rs_decode(client.srv_sock.recv(4096))
             if data == '':
-                raise Exception('recv failed')
+                raise socket.error
 
         except socket.error:
             if client == self.current_dbg:
