@@ -116,9 +116,9 @@ DBG_DIALECTS = {
         'go': 'continue',
         'run': 'run',
         'bp': 'b *',
-        'hbp': 'xxxx *',
+        'hbp': 'xxx',
         'bp1': 'tb *',
-        'hbp1': 'xxxx *'},
+        'hbp1': 'xxx'},
     'ollydbg2': {
         'prefix': '',
         'si': 'si',
