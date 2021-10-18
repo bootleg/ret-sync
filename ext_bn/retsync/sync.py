@@ -636,7 +636,7 @@ class SyncPlugin(UIContextNotification):
             if not self.binary_view.navigate(view, goto_addr):
                 rs_log(f"goto {hex(goto_addr)} error")
 
-            if not self.cb_trace_enabled:
+            if self.cb_trace_enabled:
                 self.color_callback(goto_addr)
         else:
             rs_log('goto: no view available')
