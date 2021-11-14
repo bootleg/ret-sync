@@ -62,6 +62,7 @@ that I developed and maintained during my stay at
   - [OllyDbg 1.10 usage](#ollydbg-110-usage)
   - [OllyDbg2 usage](#ollydbg2-usage)
   - [x64dbg usage](#x64dbg-usage)
+  - [Python library usage](#python-library-usage)
 - [Extend](#extend)
 - [TODO](#todo)
 - [Known Bugs/Limitations](#known-bugslimitations)
@@ -80,11 +81,16 @@ The debugger plugins:
 * `ext_olly2`: OllyDbg v2 plugin
 * `ext_x64dbg`: x64dbg plugin
 
-And the disassembler plugins:
+The disassembler plugins:
 
 * `ext_ida/SyncPlugin.py`
 * `ext_ghidra/dist/ghidra_*_retsync.zip`: Ghidra plugin
 * `ext_bn/retsync`: Binary Ninja plugin
+
+
+And the library plugin:
+
+* `ext_lib/sync.py`: standalone Python library
 
 
 # General prerequisites
@@ -964,6 +970,47 @@ Note: using the **!translate** command from a disassembler (IDA/Ghidra,
 ``Alt-F2`` shortcut), will make the disassembler window to "jump" to the
 specific address (equivalent of running **disasm <rebased addr>** in x64dbg
 command line).
+
+
+## Python library usage
+
+One may want to use **ret-sync** core features (position syncing with a
+disassembler, symbol resolution) even though a full debugging environment is
+not available or with a custom tool. To that end, a minimalist Python library
+has been extracted.
+
+The example below illustrates the usage of the Python library with a script
+that walks through the output of an event logging/tracing tool.
+
+
+```python
+from sync import *
+
+HOST = '127.0.0.1'
+
+MAPPINGS = [
+    [0x555555400000, 0x555555402000,  0x2000, " /bin/tempfile"],
+    [0x7ffff7dd3000, 0x7ffff7dfc000, 0x29000, " /lib/x86_64-linux-gnu/ld-2.27.so"],
+    [0x7ffff7ff7000, 0x7ffff7ffb000,  0x4000, " [vvar]"],
+    [0x7ffff7ffb000, 0x7ffff7ffc000,  0x1000, " [vdso]"],
+    [0x7ffffffde000, 0x7ffffffff000, 0x21000, " [stack]"],
+]
+
+EVENTS = [
+    [0x0000555555400e74, "malloc"],
+    [0x0000555555400eb3, "open"],
+    [0x0000555555400ee8, "exit"]
+]
+
+synctool = Sync(HOST, MAPPINGS)
+
+for e in EVENTS:
+    offset, name = e
+    synctool.invoke(offset)
+    print("    0x%08x - %s" % (offset, name))
+    print("[>] press enter for next event")
+    input()
+```
 
 
 # Extend
