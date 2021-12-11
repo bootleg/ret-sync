@@ -191,6 +191,7 @@ PY_WIN_DEFAULTS = (
 PY_WIN_LOCAL_DEFAULTS = (
     "%LOCALAPPDATA%\\Programs\\Python\\Python37",
     "%LOCALAPPDATA%\\Programs\\Python\\Python38",
+    "%LOCALAPPDATA%\\Programs\\Python\\Python39",
     )
 
 # default paths Linux/Mac OS X platforms
