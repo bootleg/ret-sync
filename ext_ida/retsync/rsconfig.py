@@ -179,25 +179,23 @@ def rs_decode(buffer_bytes):
     return buffer_bytes.decode(RS_ENCODING)
 
 
-# default paths Windows platforms
-PY_WIN_DEFAULTS = (
-    "C:\\Program Files\\Python37",
-    "C:\\Program Files\\Python37-32",
-    "C:\\Python27",
-    "C:\\Python27-x64",
-    )
+# default global paths Windows platforms
+PY_WIN_DEFAULTS = set(["C:\\Python27", "C:\\Python27-x64"])
 
-# default paths Windows platforms
-PY_WIN_LOCAL_DEFAULTS = (
-    "%LOCALAPPDATA%\\Programs\\Python\\Python37",
-    "%LOCALAPPDATA%\\Programs\\Python\\Python38",
-    "%LOCALAPPDATA%\\Programs\\Python\\Python39",
-    )
+# default local/user paths Windows platforms
+PY_WIN_LOCAL_DEFAULTS = set()
+
+PY3_RELEASES = ["37", "38", "39", "310"]
+
+for py_rel in PY3_RELEASES:
+    PY_WIN_DEFAULTS.add("C:\\Program Files\\Python%s" % py_rel)
+    PY_WIN_DEFAULTS.add("C:\\Program Files (x86)\\Python%s-32" % py_rel)
+    PY_WIN_LOCAL_DEFAULTS.add("%%LOCALAPPDATA%%\\Programs\\Python\\Python%s" % py_rel)
+    PY_WIN_LOCAL_DEFAULTS.add("%%LOCALAPPDATA%%\\Programs\\Python\\Python%s-32" % py_rel)
+
 
 # default paths Linux/Mac OS X platforms
-PY_LINUX_DEFAULTS = (
-    "/usr/bin",
-    )
+PY_LINUX_DEFAULTS = ("/usr/bin")
 
 
 # retsync plugin needs a Python interpreter to run broker and dispatcher
