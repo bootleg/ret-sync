@@ -31,6 +31,7 @@ import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JCheckBox;
 import javax.swing.SwingConstants;
 
 import org.apache.commons.io.FilenameUtils;
@@ -59,6 +60,7 @@ public class RetSyncComponent extends ComponentProvider {
     private JLabel statusArea;
     private JLabel clientArea;
     private JLabel programArea;
+    private JCheckBox translateAddresses;
 
     private DockingAction action_enable;
     private DockingAction action_disable;
@@ -117,6 +119,9 @@ public class RetSyncComponent extends ComponentProvider {
         Icon CODE_ICON = ResourceManager.loadImage("images/viewedCode.gif");
         programArea = new JLabel(CODE_ICON, SwingConstants.LEFT);
         panel.add(programArea, gbc);
+
+        translateAddresses = new JCheckBox("Translate addresses", true);
+        panel.add(translateAddresses, gbc);
     }
 
     private NavigatableContextAction codeViewerActionFactory(String name, String cmd, KeyBindingData keyBinding) {
@@ -335,14 +340,21 @@ public class RetSyncComponent extends ComponentProvider {
         switch (status) {
         case Status.IDLE:
             statusArea.setForeground(Color.BLACK);
+            translateAddresses.setEnabled(true);
             break;
         case Status.ENABLED:
             statusArea.setForeground(Color.BLUE);
+            translateAddresses.setEnabled(true);
             break;
         case Status.RUNNING:
+            translateAddresses.setEnabled(false);
             statusArea.setForeground(COLOR_CONNECTED);
             break;
         }
+    }
+
+    public boolean getTranslate() {
+        return translateAddresses.isSelected();
     }
 
     @Override

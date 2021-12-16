@@ -353,7 +353,11 @@ public class RetSyncPlugin extends ProgramPlugin {
     // current program image base and update remote base address
     Address rebase(long base, long offset) {
         imageBaseRemote = imageBaseLocal.getNewAddress(base);
-        return rebaseLocal(imageBaseLocal.getNewAddress(offset));
+        if(uiComponent.getTranslate()) {
+            return rebaseLocal(imageBaseLocal.getNewAddress(offset));
+        } else {
+            return imageBaseLocal.getNewAddress(offset);
+        }
     }
 
     // rebase remote address with respect to
@@ -389,6 +393,9 @@ public class RetSyncPlugin extends ProgramPlugin {
     // rebase local address with respect to
     // remote program image base
     Address rebaseRemote(Address loc) {
+        if (!uiComponent.getTranslate()) {
+            return loc;
+        }
         Address dest;
 
         if (program == null)
