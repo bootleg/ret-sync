@@ -294,15 +294,15 @@ class ClientHandler(asyncore.dispatcher_with_send):
             for request in batch:
                 self.request_handler.safe_parse(self, request)
         else:
-            rs_log("handler lost client")
+            rs_debug("handler lost client")
             self.close()
 
     def handle_expt(self):
-        rs_log("handler error")
+        rs_log("client error")
         self.close()
 
     def handle_close(self):
-        rs_log("handler close")
+        rs_log("client quit")
         self.close()
 
 
