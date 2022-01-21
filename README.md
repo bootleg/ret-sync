@@ -450,11 +450,9 @@ Please check your debugger configuration and/or network access.
 
 As WinDbg Preview loads both plugins (``x86`` and  ``x64``) from the same
 directory, one can rename the ``x86`` file `sync32.dll`.
+
 ```
-0:000> .load sync
-The call to LoadLibrary(sync) failed, Win32 error 0n193
-    "%1 is not a valid Win32 application."
-Please check your debugger configuration and/or network access.
+0:000> .load sync32
 ```
 
 
