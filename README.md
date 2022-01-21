@@ -439,7 +439,7 @@ Please check your debugger configuration and/or network access.
 ```
 
 The error below usually means that Windbg tried to load the incorrect flavour
-of the extension, ex: ``x86`` in place of the ``x64`` `sync.dll`.
+of the extension, ex: ``x64`` in place of the ``x86`` `sync.dll`.
 
 ```
 0:000> .load sync
@@ -447,6 +447,16 @@ The call to LoadLibrary(sync) failed, Win32 error 0n193
     "%1 is not a valid Win32 application."
 Please check your debugger configuration and/or network access.
 ```
+
+As WinDbg Preview loads both plugins (``x86`` and  ``x64``) from the same
+directory, one can rename the ``x86`` file `sync32.dll`.
+```
+0:000> .load sync
+The call to LoadLibrary(sync) failed, Win32 error 0n193
+    "%1 is not a valid Win32 application."
+Please check your debugger configuration and/or network access.
+```
+
 
 ## GNU gdb (GDB) installation
 
@@ -980,7 +990,7 @@ not available or with a custom tool. To that end, a minimalist Python library
 has been extracted.
 
 The example below illustrates the usage of the Python library with a script
-that walks through the output of an event logging/tracing tool.
+that walks through the output of an event based logging/tracing tool.
 
 
 ```python
