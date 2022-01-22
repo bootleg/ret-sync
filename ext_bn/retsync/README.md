@@ -1,4 +1,4 @@
-# ret-sync (v0.1.0)
+# ret-sync (v0.1.1)
 Author: **Alexandre Gazet**
 
 _Helper plugin to synchronize Binary Ninja with a debugging session_

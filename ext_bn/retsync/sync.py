@@ -378,10 +378,18 @@ class ClientListenerTask(threading.Thread):
 class Program:
     path: Path
     base: int = None
+    refcount : int = 1
+
+    def lock(self):
+        self.refcount  += 1
+
+    def release(self):
+        self.refcount  -= 1
+        return (self.refcount  == 0)
 
 
 # ProgramManager is used to keep track of opened tabs
-# and program states
+# and programs' state (e.g. base address)
 class ProgramManager(object):
     def __init__(self):
         self.opened = OrderedDict()
@@ -389,14 +397,17 @@ class ProgramManager(object):
     def add(self, file):
         ppath = Path(file)
         if ppath.name in self.opened:
-            rs_log(f"name collision:\n  - {ppath.name}\n  - {self.opened[ppath.name].name}")
+            rs_log(f"name collision ({ppath.name}):\n  - new:      \"{ppath}\"\n  - existing: \"{self.opened[ppath.name].path}\"")
+            rs_log(f"warning, tab switching may not work as expected")
+            self.opened[ppath.name].lock()
         else:
             self.opened[ppath.name] = Program(ppath)
 
     def remove(self, file):
         pgm = Path(file).name
         if pgm in self.opened:
-            del self.opened[pgm]
+            if self.opened[pgm].release():
+                del self.opened[pgm]
 
     def exists(self, pgm):
         return (Path(pgm).name in self.opened)
