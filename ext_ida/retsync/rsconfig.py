@@ -220,8 +220,8 @@ def get_python_interpreter():
         PYTHON_PATHS = PY_WIN_DEFAULTS
 
         # add paths from %LOCALAPPDATA%
-        localpaths = tuple([os.path.expandvars(pp) for pp in PY_WIN_LOCAL_DEFAULTS])
-        PYTHON_PATHS = PYTHON_PATHS + localpaths
+        for ladp in PY_WIN_LOCAL_DEFAULTS:
+            PYTHON_PATHS.add(os.path.expandvars(ladp))
 
     elif sys.platform.startswith('linux') or sys.platform == 'darwin':
         PYTHON_BIN = 'python'
