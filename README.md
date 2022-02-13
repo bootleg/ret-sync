@@ -220,14 +220,29 @@ plugin. It allows overriding some fields such as the PID and memory mappings.
 `.sync` content extract:
 
 ```
-    [INIT]
-    context = {
-          "pid": 200,
-          "mappings": [ [0x400000, 0x7A81158, 0x7681158, "asav941-200.qcow2|lina"] ]
-      }
+[INIT]
+context = {
+      "pid": 200,
+      "mappings": [ [0x400000, 0x7A81158, 0x7681158, "asav941-200.qcow2|lina"] ]
+  }
 ```
 
 Each entry in the mappings is: ``mem_base``, ``mem_end``, ``mem_size``, ``mem_name``.
+
+
+## Bypassing automatic address rebasing
+
+In some scenarios, such as debugging embedded devices or connecting to
+minimalist debug interfaces, it may be more convenient to bypass the
+automatic address rebasing feature implemented in the disassembler plugins.
+
+The `use_raw_addr` option is currently supported only for Ghidra. In
+the .sync configuration file use:
+
+```
+[GENERAL]
+use_raw_addr=true
+```
 
 
 # Installation
@@ -1045,7 +1060,7 @@ Other resource(s):
 
 # Known Bugs/Limitations
 
-- Tested with Python 2.7/3.7, IDA 7.5 (Windows, Linux and Mac OS X), Ghidra 9.2, Binary Ninja 2.2.2487, GNU gdb (GDB) 8.1.0 (Debian), lldb 310.2.37.
+- Tested with Python 2.7/3.7, IDA 7.7 (Windows, Linux and Mac OS X), Ghidra 10.1.1, Binary Ninja 3.0.3225-dev, GNU gdb (GDB) 8.1.0 (Debian), lldb 310.2.37.
 - **THERE IS NO AUTHENTICATION/ENCRYPTION** whatsoever between the parties; you're on your own.
 - Self modifying code is out of scope.
 

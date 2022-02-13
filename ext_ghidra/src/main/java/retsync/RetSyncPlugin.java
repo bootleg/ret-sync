@@ -1,6 +1,6 @@
 /*
 
-Copyright (C) 2019-2020, Alexandre Gazet.
+Copyright (C) 2019-2022, Alexandre Gazet.
 
 This file is part of ret-sync.
 
@@ -104,7 +104,8 @@ public class RetSyncPlugin extends ProgramPlugin {
     Map<String, Long> moduleBaseRemote = Collections.<String, Long>emptyMap();
     Boolean syncEnabled = false;
     Boolean syncModAuto = true;
-
+    Boolean bUseRawAddr = false;
+    
     // default configuration
     private static final boolean DEBUG_CALLBACK = false;
     protected static final boolean DEBUG_MODULES = false;
@@ -117,7 +118,7 @@ public class RetSyncPlugin extends ProgramPlugin {
     protected int SYNC_PORT = SYNC_PORT_DEFAULT;
     protected HashMap<String, String> aliases = new HashMap<String, String>();
     protected boolean bUseEnhancedHighlight = true;
-
+    
     public RetSyncPlugin(PluginTool tool) {
         super(tool, true, true);
         String pluginName = getName();
@@ -290,7 +291,14 @@ public class RetSyncPlugin extends ProgramPlugin {
 
         try {
             Ini config = new Ini(fd);
-
+            
+            Section secGeneral = config.get("GENERAL");
+            if (secGeneral != null) {
+                Boolean use_raw_addr = Boolean.valueOf(secGeneral.getOrDefault("use_raw_addr", "false"));
+                cs.println(String.format("  - using raw addresses: %s", use_raw_addr));
+                bUseRawAddr = use_raw_addr;
+            }          
+            
             Section secNetwork = config.get("INTERFACE");
             if (secNetwork != null) {
                 String host = secNetwork.getOrDefault("host", SYNC_HOST);
@@ -360,7 +368,10 @@ public class RetSyncPlugin extends ProgramPlugin {
     // local program image base
     Address rebaseLocal(Address loc) {
         Address dest;
-
+        
+        if (bUseRawAddr)
+        	return loc;
+        
         if (program == null)
             return null;
 
@@ -390,10 +401,13 @@ public class RetSyncPlugin extends ProgramPlugin {
     // remote program image base
     Address rebaseRemote(Address loc) {
         Address dest;
-
+        
+        if (bUseRawAddr)
+        	return loc;
+        
         if (program == null)
             return null;
-
+        
         try {
             dest = imageBaseRemote.addNoWrap(loc.subtract(imageBaseLocal));
         } catch (AddressOverflowException e) {
