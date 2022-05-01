@@ -195,7 +195,7 @@ for py_rel in PY3_RELEASES:
 
 
 # default paths Linux/Mac OS X platforms
-PY_LINUX_DEFAULTS = ("/usr/bin")
+PY_LINUX_DEFAULTS = ("/usr/bin",)
 
 
 # retsync plugin needs a Python interpreter to run broker and dispatcher
