@@ -29,12 +29,6 @@ try:
 except ImportError:
     from configparser import ConfigParser as SafeConfigParser
 
-try:
-    import distutils.spawn
-    spawn_module = True
-except ImportError:
-    spawn_module = False
-
 
 # global plugin settings
 PLUGIN_DIR = 'retsync'
@@ -200,49 +194,7 @@ PY_LINUX_DEFAULTS = ("/usr/bin",)
 
 # retsync plugin needs a Python interpreter to run broker and dispatcher
 def get_python_interpreter():
-    # when available, use spawn module to search through PATH
-    if spawn_module:
-        interpreter = distutils.spawn.find_executable('python')
-        if interpreter:
-            # discard Universal Windows Platform (UWP) directory
-            parts = os.path.split(interpreter)
-            if (len(parts) > 1 and parts[-2].endswith('WindowsApps')):
-                rs_log("Warning, python.exe was detected but is installed as a Windows App (UWP).\n"
-                       "       Dir: \"%s\"\n"
-                       "       This plugin requires a Windows desktop program in order to work properly.\n"
-                       "       Searching for other installations.\n" % interpreter)
-            else:
-                return interpreter
-
-    # otherwise, look in various known default paths
-    if sys.platform == 'win32':
-        PYTHON_BIN = 'python.exe'
-        PYTHON_PATHS = PY_WIN_DEFAULTS
-
-        # add paths from %LOCALAPPDATA%
-        for ladp in PY_WIN_LOCAL_DEFAULTS:
-            PYTHON_PATHS.add(os.path.expandvars(ladp))
-
-    elif sys.platform.startswith('linux') or sys.platform == 'darwin':
-        PYTHON_BIN = 'python'
-        PYTHON_PATHS = PY_LINUX_DEFAULTS
-
-    else:
-        rs_log("plugin initialization failed: unknown platform \"%s\"\n"
-               "       please fix PYTHON_PATH/PYTHON_BIN in %s/rsconfig.py\n"
-               % (sys.platform, PLUGIN_DIR))
-
-        raise RuntimeError
-
-    for pp in PYTHON_PATHS:
-        interpreter = os.path.realpath(os.path.normpath(os.path.join(pp, PYTHON_BIN)))
-        if os.path.exists(interpreter):
-            return interpreter
-
-    rs_log("plugin initialization failed: Python interpreter not found\n"
-           "       please fix PYTHON_PATH/PYTHON_BIN in %s/rsconfig.py\n" % PLUGIN_DIR)
-
-    raise RuntimeError
+    return sys.executable
 
 
 # this function is used by the main plugin, the broker and the dispatcher
