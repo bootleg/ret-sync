@@ -120,7 +120,7 @@ public class RetSyncPlugin extends ProgramPlugin {
     protected boolean bUseEnhancedHighlight = true;
     
     public RetSyncPlugin(PluginTool tool) {
-        super(tool, true, true);
+        super(tool);
         String pluginName = getName();
         uiComponent = new RetSyncComponent(this, pluginName);
     }
