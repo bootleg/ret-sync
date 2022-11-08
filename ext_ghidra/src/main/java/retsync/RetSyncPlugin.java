@@ -255,6 +255,7 @@ public class RetSyncPlugin extends ProgramPlugin {
         locations.add(Paths.get(System.getProperty("user.home")).toString());
 
         for (String loc : locations) {
+            cs.println(String.format("[>] Searching %s in %s", CONF_INI_FILE, loc));
             if (loadConfigurationFrom(Paths.get(loc, CONF_INI_FILE))) {
                 break;
             }
