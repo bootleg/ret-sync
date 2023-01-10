@@ -174,23 +174,29 @@ class DbgHelp():
         try:
             for line in mapping.splitlines():
                 e = [x for x in line.strip().split() if x != '']
-                if (not e) or (len(e) < 5):
+                if (not e) or (len(e) < 5) or not e[0].startswith('0x'):
                     continue
-                else:
-                    if not e[0].startswith('0x'):
-                        continue
-
+                elif len(e) == 5:
                     name = (' ').join(e[4:])
                     e = e[:4] + [name]
                     start, end, size, offset, name = e
+                
+                # For newer GDB versions, where Perms is added as a column in the mappings
+                elif len(e) == 6:
+                    name = (' ').join(e[5:])
+                    e = e[:5] + [name]
+                    start, end, size, offset, perms, name = e              
 
-                    new_entry = [int(start, 16), int(end, 16), int(size, 16), name]
+                else:
+                    raise ValueError(f'Unknown amount of columns ({len(e)}) for the "info proc mappings" command! Possibly unknown GDB version?')
 
-                    if DbgHelp.coalesce_space(maps, new_entry[0], name):
-                        maps[-1][1] = new_entry[1]
-                        maps[-1][2] += new_entry[2]
-                    else:
-                        maps.append(new_entry)
+                new_entry = [int(start, 16), int(end, 16), int(size, 16), name]
+
+                if DbgHelp.coalesce_space(maps, new_entry[0], name):
+                    maps[-1][1] = new_entry[1]
+                    maps[-1][2] += new_entry[2]
+                else:
+                    maps.append(new_entry)
 
         except Exception as e:
             print(e)
