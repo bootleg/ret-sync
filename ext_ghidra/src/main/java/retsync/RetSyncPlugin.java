@@ -120,7 +120,7 @@ public class RetSyncPlugin extends ProgramPlugin {
     protected boolean bUseEnhancedHighlight = true;
     
     public RetSyncPlugin(PluginTool tool) {
-        super(tool, true, true);
+        super(tool);
         String pluginName = getName();
         uiComponent = new RetSyncComponent(this, pluginName);
     }
@@ -255,6 +255,7 @@ public class RetSyncPlugin extends ProgramPlugin {
         locations.add(Paths.get(System.getProperty("user.home")).toString());
 
         for (String loc : locations) {
+            cs.println(String.format("[>] Searching %s in %s", CONF_INI_FILE, loc));
             if (loadConfigurationFrom(Paths.get(loc, CONF_INI_FILE))) {
                 break;
             }
