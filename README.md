@@ -360,8 +360,8 @@ databases.
 
 ### Install the Binary Ninja extension
 
-**ret-sync** is not yet distributed through the Binary Ninja's Plugin Manager;
-a manual installation is required. Simply copy that content of the `ext_bn`
+You can either install **ret-sync** through the Binary Ninja's Plugin Manager or do a manual installation.
+To manually install the plugin, simply copy that content of the `ext_bn`
 folder into Binary Ninja's plugins folder, for example:
 
 `%APPDATA%\Binary Ninja\plugins`
