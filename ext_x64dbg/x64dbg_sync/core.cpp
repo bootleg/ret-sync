@@ -464,7 +464,8 @@ HRESULT synchelp()
 		" > !idblist                       = display list of all IDB clients connected to the dispatcher\n"
 		" > !idb <module name>             = set given module as the active idb (see !idblist)\n"
 		" > !idbn <n>                      = set active idb to the n_th client. n should be a valid decimal value\n"
-		" > !translate <base> <addr> <mod> = rebase an address with respect to local module's base\n\n");
+		" > !translate <base> <addr> <mod> = rebase an address with respect to local module's base\n"
+		" > !insync                        = synchronize the selected instruction block in the disassembly window.\n\n");
 
 	return hRes;
 }
@@ -531,6 +532,68 @@ HRESULT idblist()
 
 RESTORE_TIMER:
 	CreatePollTimer();
+	return hRes;
+}
+
+
+// insync command implementation
+HRESULT InsSync()
+{
+	HRESULT hRes = E_FAIL;
+	DWORD dwRes = 0;
+	ULONG_PTR PrevBase = g_Base;
+	HANDLE hProcess = INVALID_HANDLE_VALUE;
+	SELECTIONDATA sel;
+
+	hRes = GuiSelectionGet(GUI_DISASSEMBLY, &sel);
+	if (FAILED(hRes))
+		goto INSYNC_FAILURE;
+
+	g_Base = DbgFunctions()->ModBaseFromAddr(sel.start);
+	if (!g_Base)
+	{
+		_plugin_logprintf("[insync] InsSync(%p): could not get module base...\n", sel.start);
+		goto INSYNC_FAILURE;
+	}
+
+#if VERBOSE >= 2
+	_plugin_logprintf("[insync] InsSync(%p): module base %p\n", sel.start, g_Base);
+#endif
+
+	// Check if we are in a new module
+	if ((g_Base != PrevBase) && g_SyncAuto)
+	{
+		hProcess = DbgGetProcessHandle();
+
+		dwRes = GetModuleBaseNameA(hProcess, (HMODULE)g_Base, g_NameBuffer, MAX_MODULE_SIZE);
+		if (dwRes == 0)
+		{
+			_plugin_logprintf("[insync] InsSync(%p): could not get module name...\n", sel.start);
+			goto INSYNC_FAILURE;
+		}
+
+#if VERBOSE >= 2
+		_plugin_logprintf("[insync] InsSync(%p): module : \"%s\"\n", sel.start, g_NameBuffer);
+#endif
+
+		hRes = TunnelSend("[notice]{\"type\":\"module\",\"path\":\"%s\"}\n", g_NameBuffer);
+		if (FAILED(hRes)) {
+			return hRes;
+		}
+	}
+
+	hRes = TunnelSend("[sync]{\"type\":\"loc\",\"base\":%llu,\"offset\":%llu}\n", (ULONG64)g_Base, (ULONG64)sel.start);
+
+	return hRes;
+
+INSYNC_FAILURE:
+	// Inform the dispatcher that an error occured in the instruction sync
+	if (g_Base != NULL)
+	{
+		TunnelSend("[notice]{\"type\":\"dbg_err\"}\n");
+		g_Base = NULL;
+	}
+
 	return hRes;
 }
 
@@ -912,6 +975,17 @@ static bool cbRcmtCommand(int argc, char* argv[])
 }
 
 
+static bool cbInsyncCommand(int argc, char* argv[])
+{
+#if VERBOSE >= 2
+	_plugin_logputs("[sync] insync command!");
+#endif
+
+	InsSync();
+	return true;
+}
+
+
 static bool cbTranslateCommand(int argc, char* argv[])
 {
 #if VERBOSE >= 2
@@ -1040,6 +1114,9 @@ void coreInit(PLUG_INITSTRUCT* initStruct)
 	if (!_plugin_registercommand(pluginHandle, "!translate", cbTranslateCommand, true))
 		_plugin_logputs("[sync] error registering the \"!translate\" command!");
 
+	if (!_plugin_registercommand(pluginHandle, "!insync", cbInsyncCommand, true))
+		_plugin_logputs("[sync] error registering the \"!insync\" command");
+
 	// initialize globals
 	g_Synchronized = FALSE;
 
@@ -1077,6 +1154,7 @@ void coreStop()
 	_plugin_unregistercommand(pluginHandle, "!cmt");
 	_plugin_unregistercommand(pluginHandle, "!rcmt");
 	_plugin_unregistercommand(pluginHandle, "!translate");
+	_plugin_unregistercommand(pluginHandle, "!insync");
 	_plugin_menuclear(hMenu);
 }
 
