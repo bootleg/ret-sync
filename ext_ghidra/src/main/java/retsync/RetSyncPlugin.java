@@ -510,7 +510,7 @@ public class RetSyncPlugin extends ProgramPlugin {
         }
     }
 
-    boolean doTransaction(Command cmd, String tName) {
+    boolean doTransaction(Command<Program> cmd, String tName) {
         boolean res = false;
         int transactionID = program.startTransaction(tName);
 
