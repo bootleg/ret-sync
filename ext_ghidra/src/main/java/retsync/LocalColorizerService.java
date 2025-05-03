@@ -299,7 +299,7 @@ public class LocalColorizerService {
             addPrimaryHighlight(token, defaultHighlightColor);
             if (token instanceof ClangSyntaxToken) {
                 addPrimaryHighlightToTokensForParenthesis((ClangSyntaxToken) token, defaultParenColor);
-                addBraceHighlight((ClangSyntaxToken) token, defaultParenColor);
+                addPrimaryHighlightToTokensForBrace((ClangSyntaxToken) token, defaultParenColor);
             }
         }
     }

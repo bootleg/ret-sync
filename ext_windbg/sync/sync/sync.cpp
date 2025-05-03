@@ -458,23 +458,32 @@ EventFilterCb(BOOL *pbIgnoreEvent)
     {
         if (CommandSize > 1)
         {
-            // Find last command, delimiter is ';'
-            LastCommand = strrchr(g_CmdBuffer.buffer, 0x3b);
+            bool bTrackingColon = false;
+            bool bTrackingG = false;
 
-            if (LastCommand == NULL){
-                LastCommand = g_CmdBuffer.buffer;
-            }
-            else {
-                LastCommand++;
-            }
+            for (ULONG i = CommandSize - 1; i < CommandSize; i--) {
+                if (bTrackingColon) {
+                    if (g_CmdBuffer.buffer[i] == 'g') {
+                        bTrackingColon = false;
+                        bTrackingG = true;
+                    }
+                }
+                else if (bTrackingG) {
+                    if (g_CmdBuffer.buffer[i] == ' ' || g_CmdBuffer.buffer[i] == ';') {
+                        *pbIgnoreEvent = true;
+                    }
 
-            while (*LastCommand == 0x20){
-                LastCommand++;
-            }
+                    break;
+                }
+                else {
 
-            // 'Go' command (g, gH, gN), epicly loosy matching
-            if (*LastCommand == 0x67){
-                *pbIgnoreEvent = true;
+                    if (g_CmdBuffer.buffer[i] == ';') {
+                        bTrackingColon = true;
+                    }
+                    else if (g_CmdBuffer.buffer[i] == 'g') {
+                        bTrackingG = true;
+                    }
+                }
             }
         }
     }
