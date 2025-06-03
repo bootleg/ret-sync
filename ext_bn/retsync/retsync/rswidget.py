@@ -26,17 +26,17 @@ SOFTWARE.
 import binaryninjaui
 if 'qt_major_version' in binaryninjaui.__dict__ and binaryninjaui.qt_major_version == 6:
     from PySide6 import QtCore
-    from PySide6.QtCore import Qt
+    from PySide6.QtCore import Qt, QRectF
     from PySide6.QtWidgets import QApplication, QHBoxLayout, QVBoxLayout, QLabel, QWidget
-    from PySide6.QtGui import QKeySequence
+    from PySide6.QtGui import QKeySequence, QImage, QPainter, QFont, QColor
 else:
     from PySide2 import QtCore
-    from PySide2.QtCore import Qt
+    from PySide2.QtCore import Qt, QRectF
     from PySide2.QtWidgets import QApplication, QHBoxLayout, QVBoxLayout, QLabel, QWidget
-    from PySide2.QtGui import QKeySequence
+    from PySide2.QtGui import QKeySequence, QImage, QPainter, QFont, QColor
 
 from binaryninjaui import UIAction, UIActionHandler
-from binaryninjaui import DockHandler, DockContextHandler
+from binaryninjaui import SidebarWidget, SidebarWidgetType, SidebarWidgetLocation, SidebarContextSensitivity
 
 
 from .rsconfig import rs_log
@@ -48,12 +48,11 @@ class SyncStatus(object):
     RUNNING = "connected"
 
 
-# based on hellodockwidget.py
+# based on hellosidebar.py
 # from https://github.com/Vector35/binaryninja-api/
-class SyncDockWidget(QWidget, DockContextHandler):
-    def __init__(self, parent, name, data):
-        QWidget.__init__(self, parent)
-        DockContextHandler.__init__(self, self, name)
+class SyncDockWidget(SidebarWidget):
+    def __init__(self, name, frame, data):
+        SidebarWidget.__init__(self, name)
         self.actionHandler = UIActionHandler()
         self.actionHandler.setupActionHandler(self)
 
@@ -119,6 +118,28 @@ class SyncDockWidget(QWidget, DockContextHandler):
         self.client_pgm.setText('n/a')
         self.client_dbg.setText('n/a')
 
-    @staticmethod
-    def create_widget(name, parent, data=None):
-        return SyncDockWidget(parent, name, data)
+class SyncDockWidgetType(SidebarWidgetType):
+    def __init__(self, plugin):
+        self.plugin = plugin
+        icon = QImage(56, 56, QImage.Format_RGB32)
+        icon.fill(0)
+        # Render an "H" as the example icon
+        p = QPainter()
+        p.begin(icon)
+        p.setFont(QFont("Open Sans", 56))
+        p.setPen(QColor(255, 255, 255, 255))
+        p.drawText(QRectF(0, 0, 56, 56), Qt.AlignCenter, "R")
+        p.end()
+
+        SidebarWidgetType.__init__(self, icon, "RetSync")
+
+    def createWidget(self, frame, data):
+        widget = SyncDockWidget("RetSync", frame, data)
+        self.plugin.widget = widget
+        return widget
+
+    def defaultLocation(self):
+        return SidebarWidgetLocation.RightContent
+
+    def contextSensitivity(self):
+        return SidebarContextSensitivity.SelfManagedSidebarContext

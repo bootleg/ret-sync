@@ -31,9 +31,8 @@ else:
     from PySide2 import QtCore
     from PySide2.QtCore import Qt
 
-from binaryninjaui import DockHandler
 from binaryninjaui import UIAction, UIActionHandler, UIContext, UIContextNotification
-from binaryninjaui import ViewFrame
+from binaryninjaui import ViewFrame, Sidebar
 
 from binaryninja.plugin import BackgroundTaskThread, PluginCommand
 
@@ -52,7 +51,7 @@ from dataclasses import dataclass
 
 from .retsync import rsconfig as rsconfig
 from .retsync.rsconfig import rs_encode, rs_decode, rs_log, rs_debug, load_configuration
-from .retsync.rswidget import SyncDockWidget
+from .retsync.rswidget import SyncDockWidgetType
 
 
 class SyncHandler(object):
@@ -362,7 +361,7 @@ class ClientListenerTask(threading.Thread):
             rs_log('server started')
             asyncore.loop()
         except Exception as e:
-            rs_log('server initialization failed')
+            rs_log(f'server initialization failed: {e}')
             self.cancel()
             self.plugin.cmd_syncoff()
 
@@ -435,9 +434,10 @@ class ProgramManager(object):
 
     def list_dyn(self):
         self.opened = {}
-        dock = DockHandler.getActiveDockHandler()
-        view_frame = dock.getViewFrame()
-
+        ui_ctx = UIContext.activeContext()
+        view_frame = None
+        if ui_ctx:
+            view_frame = ui_ctx.getCurrentViewFrame()
         if view_frame:
             frames = view_frame.parent()
             for i in range(frames.count()):
@@ -479,10 +479,7 @@ class SyncPlugin(UIContextNotification):
         self.cb_trace_enabled = False
 
     def init_widget(self):
-        dock_handler = DockHandler.getActiveDockHandler()
-        parent = dock_handler.parent()
-        self.widget = SyncDockWidget.create_widget("ret-sync plugin", parent)
-        dock_handler.addDockWidget(self.widget, Qt.BottomDockWidgetArea, Qt.Horizontal, True, False)
+        Sidebar.addSidebarWidgetType(SyncDockWidgetType(self))
 
     def OnAfterOpenFile(self, context, file, frame):
         self.pgm_mgr.add(file.getRawData().file.original_filename)
@@ -731,7 +728,7 @@ class SyncPlugin(UIContextNotification):
             return
 
         if not self.base_remote:
-            rs_log(f"{cmd} failed, remote base of {self.current_pgm} program unknown")
+            rs_log(f"{bp_cmd} failed, remote base of {self.current_pgm} program unknown")
             return
 
         remote_addr = self.rebase_remote(ui_addr)
