@@ -181,7 +181,7 @@ class DbgHelp():
                     if not e[0].startswith('0x'):
                         continue
 
-                    name = (' ').join(e[4:])
+                    name = (' ').join(e[5:])
                     e = e[:4] + [name]
                     start, end, size, offset, name = e
 
@@ -457,6 +457,7 @@ class Sync(gdb.Command):
                     self.tunnel.send("[notice]{\"type\":\"module\",\"path\":\"%s\",\"modules\":[%s]}\n" % (sym, ','.join(modules)))
                     self.base = base
 
+                rs_log("sending location: base=0x%x, offset=0x%x" % (self.base, self.offset), logging.DEBUG)
                 self.tunnel.send("[sync]{\"type\":\"loc\",\"base\":%d,\"offset\":%d}\n" % (self.base, self.offset))
             else:
                 rs_log("unknown module at current PC: 0x%x" % self.offset)
@@ -957,9 +958,9 @@ class Cc(WrappedCommand):
         # Finally, delete breakpoint that we hit
         # XXX - we should actually log if the breakpoint we set earlier is the one we hit
         #       otherwise we remove the breakpoint anyway :/
-        regexp_list = re.findall("Thread \d hit Breakpoint \d+, (0x[0-9a-f]+) in", res)
+        regexp_list = re.findall(r"Thread \d hit Breakpoint \d+, (0x[0-9a-f]+) in", res)
         if not regexp_list:
-            regexp_list = re.findall("Breakpoint \d+, (0x[0-9a-f]+) in", res)
+            regexp_list = re.findall(r"Breakpoint \d+, (0x[0-9a-f]+) in", res)
         if regexp_list:
             reached_addr = int(regexp_list[0], 16)
             if reached_addr == ida_cursor:
