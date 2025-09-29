@@ -61,6 +61,7 @@ RS_ENCODING = 'utf-8'
 
 # log settings
 LOG_LEVEL = logging.INFO
+#LOG_LEVEL = logging.DEBUG
 LOG_PREFIX = 'sync'
 LOG_COLOR_ON = "\033[1m\033[34m"
 LOG_COLOR_OFF = "\033[0m"
@@ -264,6 +265,7 @@ class Tunnel():
         return msg
 
     def send(self, msg):
+        rs_log("sending: "+msg, lvl=logging.DEBUG)
         if not self.sock:
             rs_log("tunnel_send: tunnel is unavailable (did you forget to sync ?)")
             return
