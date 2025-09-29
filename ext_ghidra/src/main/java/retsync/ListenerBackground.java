@@ -41,7 +41,7 @@ public class ListenerBackground implements Runnable {
     public void bind() throws IOException {
         InetAddress byAddress = InetAddress.getByName(plugin.SYNC_HOST);
         serverSocket = new ServerSocket(plugin.SYNC_PORT, 0, byAddress);
-        plugin.cs.println("[>] server listening ");
+        plugin.cs.println("[>] server listening on " + plugin.SYNC_HOST + ":" + plugin.SYNC_PORT);
     }
 
     @Override
