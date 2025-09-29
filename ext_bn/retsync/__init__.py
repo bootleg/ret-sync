@@ -43,16 +43,16 @@ from .retsync.rsconfig import rs_log
 def add_commands(plugin):
     DbgAction = namedtuple('DbgAction', 'name, key_seq, handler')
     plugin_actions = (
-        DbgAction("SyncEnable", QKeySequence(Qt.ALT + Qt.Key_S), UIAction(plugin.cmd_sync)),
-        DbgAction("SyncDisable", QKeySequence(Qt.ALT + Qt.SHIFT + Qt.Key_S), UIAction(plugin.cmd_syncoff)),
-        DbgAction("SyncGo", QKeySequence(Qt.ALT + Qt.Key_F5), UIAction(plugin.cmd_go)),
+        DbgAction("SyncEnable", QKeySequence(Qt.ALT | Qt.Key_S), UIAction(plugin.cmd_sync)),
+        DbgAction("SyncDisable", QKeySequence(Qt.ALT | Qt.SHIFT | Qt.Key_S), UIAction(plugin.cmd_syncoff)),
+        DbgAction("SyncGo", QKeySequence(Qt.ALT | Qt.Key_F5), UIAction(plugin.cmd_go)),
         DbgAction("SyncStepOver", QKeySequence(Qt.Key_F10), UIAction(plugin.cmd_so)),
         DbgAction("SyncStepInto", QKeySequence(Qt.Key_F11), UIAction(plugin.cmd_si)),
-        DbgAction("SyncTranslate", QKeySequence(Qt.ALT + Qt.Key_F2), UIAction(plugin.cmd_translate)),
+        DbgAction("SyncTranslate", QKeySequence(Qt.ALT | Qt.Key_F2), UIAction(plugin.cmd_translate)),
         DbgAction("SyncBp", QKeySequence(Qt.Key_F2), UIAction(plugin.cmd_bp)),
-        DbgAction("SyncHwBp", QKeySequence(Qt.CTRL + Qt.Key_F2), UIAction(plugin.cmd_hwbp)),
-        DbgAction("SyncBpOneShot", QKeySequence(Qt.ALT + Qt.Key_F3), UIAction(plugin.cmd_bp1)),
-        DbgAction("SyncHwBpOneShot", QKeySequence(Qt.CTRL + Qt.Key_F3), UIAction(plugin.cmd_hwbp1))
+        DbgAction("SyncHwBp", QKeySequence(Qt.CTRL | Qt.Key_F2), UIAction(plugin.cmd_hwbp)),
+        DbgAction("SyncBpOneShot", QKeySequence(Qt.ALT | Qt.Key_F3), UIAction(plugin.cmd_bp1)),
+        DbgAction("SyncHwBpOneShot", QKeySequence(Qt.CTRL | Qt.Key_F3), UIAction(plugin.cmd_hwbp1))
         )
 
     for action in plugin_actions:
