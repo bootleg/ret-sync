@@ -414,7 +414,7 @@ class DispatcherSrv():
     def req_module(self, s, hash):
         modpath = hash['path']
         self.current_module = modname = altpath.basename(modpath)
-        matching = [idbc for idbc in self.idb_clients if (idbc.name.lower() == modname.lower())]
+        matching = [idbc for idbc in self.idb_clients if (idbc.name is not None and idbc.name.lower() == modname.lower())]
 
         if not self.sync_mode_auto:
             self.broadcast('sync_mode_auto off')
