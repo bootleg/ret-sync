@@ -987,6 +987,7 @@ Due to the beta status of OllyDbg2 API, only the following features have been im
  > !idb <module name>             = set given module as the active idb (see !idblist)
  > !idbn <n>                      = set active idb to the n_th client. n should be a valid decimal value
  > !translate <base> <addr> <mod> = rebase an address with respect to local module's base
+ > !insync                        = synchronize the selected instruction block in the disassembly window.
 ```
 
 Note: using the **!translate** command from a disassembler (IDA/Ghidra,
