@@ -221,14 +221,14 @@ plugin. It allows overriding some fields such as the PID and memory mappings.
 
 ```
 [INIT]
-context = {
-      "pid": 200,
-      "mappings": [ [0x400000, 0x7A81158, 0x7681158, "asav941-200.qcow2|lina"] ]
-  }
+context = { "pid": 200, "mappings": [ [0x400000, 0x7A81158, 0x7681158, "asav941-200.qcow2|lina"] ] }
 ```
 
 Each entry in the mappings is: ``mem_base``, ``mem_end``, ``mem_size``, ``mem_name``.
 
+If doing this with ghidra:
+- Make sure the context entry is a single line, or you will get parsing errors in the ghidra output window!
+- Make sure the mem_name matches the name of the module (name next to folder icon in program tree window) exactly!
 
 ## Bypassing automatic address rebasing
 
@@ -987,6 +987,7 @@ Due to the beta status of OllyDbg2 API, only the following features have been im
  > !idb <module name>             = set given module as the active idb (see !idblist)
  > !idbn <n>                      = set active idb to the n_th client. n should be a valid decimal value
  > !translate <base> <addr> <mod> = rebase an address with respect to local module's base
+ > !insync                        = synchronize the selected instruction block in the disassembly window.
 ```
 
 Note: using the **!translate** command from a disassembler (IDA/Ghidra,
