@@ -147,7 +147,7 @@ scenario.
 Simply create two ``.sync`` file:
 
 * one on the machine where IDA is installed, in the IDB directory:
-
+* For Ghidra, place at home directory, ex. "/home/user" or "C:\Users\user".
 ```
 [INTERFACE]
 host=192.168.128.1

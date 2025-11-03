@@ -924,7 +924,7 @@ class CmdHook(ida_kernwin.UI_Hooks):
 
         # 74sp1 BUGFIX: IDAPython: ida_kernwin.UI_Hooks.preprocess_action()
         # wouldn't allow inhibiting the action
-        pattern = re.compile('preprocess_action\(self, name\) -> int')
+        pattern = re.compile(r'preprocess_action\(self, name\) -> int')
         if pattern.search(ida_kernwin.UI_Hooks.preprocess_action.__doc__):
             self.bugfixed = True
 

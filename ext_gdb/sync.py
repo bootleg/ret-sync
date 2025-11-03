@@ -61,6 +61,7 @@ RS_ENCODING = 'utf-8'
 
 # log settings
 LOG_LEVEL = logging.INFO
+#LOG_LEVEL = logging.DEBUG
 LOG_PREFIX = 'sync'
 LOG_COLOR_ON = "\033[1m\033[34m"
 LOG_COLOR_OFF = "\033[0m"
@@ -270,6 +271,7 @@ class Tunnel():
         return msg
 
     def send(self, msg):
+        rs_log("sending: "+msg, lvl=logging.DEBUG)
         if not self.sock:
             rs_log("tunnel_send: tunnel is unavailable (did you forget to sync ?)")
             return
@@ -461,6 +463,7 @@ class Sync(gdb.Command):
                     self.tunnel.send("[notice]{\"type\":\"module\",\"path\":\"%s\",\"modules\":[%s]}\n" % (sym, ','.join(modules)))
                     self.base = base
 
+                rs_log("sending location: base=0x%x, offset=0x%x" % (self.base, self.offset), logging.DEBUG)
                 self.tunnel.send("[sync]{\"type\":\"loc\",\"base\":%d,\"offset\":%d}\n" % (self.base, self.offset))
             else:
                 rs_log("unknown module at current PC: 0x%x" % self.offset)
@@ -961,9 +964,9 @@ class Cc(WrappedCommand):
         # Finally, delete breakpoint that we hit
         # XXX - we should actually log if the breakpoint we set earlier is the one we hit
         #       otherwise we remove the breakpoint anyway :/
-        regexp_list = re.findall("Thread \d hit Breakpoint \d+, (0x[0-9a-f]+) in", res)
+        regexp_list = re.findall(r"Thread \d hit Breakpoint \d+, (0x[0-9a-f]+) in", res)
         if not regexp_list:
-            regexp_list = re.findall("Breakpoint \d+, (0x[0-9a-f]+) in", res)
+            regexp_list = re.findall(r"Breakpoint \d+, (0x[0-9a-f]+) in", res)
         if regexp_list:
             reached_addr = int(regexp_list[0], 16)
             if reached_addr == ida_cursor:
