@@ -731,7 +731,7 @@ class SyncPlugin(UIContextNotification):
             return
 
         if not self.base_remote:
-            rs_log(f"{cmd} failed, remote base of {self.current_pgm} program unknown")
+            rs_log(f"{bp_cmd} failed, remote base of {self.current_pgm} program unknown")
             return
 
         remote_addr = self.rebase_remote(ui_addr)
