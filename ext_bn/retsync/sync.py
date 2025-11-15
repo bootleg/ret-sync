@@ -521,8 +521,9 @@ class SyncPlugin(UIContextNotification):
             self.current_tab = None
 
     def bootstrap(self, dialect):
-        self.pgm_mgr.reset_bases()
-        self.widget.set_connected(dialect)
+        self.pgm_mgr.reset_bases() 
+        if self.widget:
+            self.widget.set_connected(dialect)
 
         if dialect in rsconfig.DBG_DIALECTS:
             self.dbg_dialect = rsconfig.DBG_DIALECTS[dialect]
@@ -532,14 +533,16 @@ class SyncPlugin(UIContextNotification):
         self.sync_enabled = False
         self.cb_trace_enabled = False
         self.current_pgm = None
-        self.widget.reset_client()
+        if self.widget:
+            self.widget.reset_client()
 
     def broadcast(self, msg):
         self.client.send(rs_encode(msg))
         rs_log(msg)
 
     def set_program(self, pgm):
-        self.widget.set_program(pgm)
+        if self.widget:
+            self.widget.set_program(pgm)
         if not self.pgm_mgr.exists(pgm):
             return
         self.sync_enabled = True
@@ -783,6 +786,7 @@ class SyncPlugin(UIContextNotification):
         if self.client_listener:
             self.client_listener.cancel()
             self.client_listener = None
-            self.widget.reset_status()
+            if self.widget:
+                self.widget.reset_status()
         else:
             rs_log('not listening')
