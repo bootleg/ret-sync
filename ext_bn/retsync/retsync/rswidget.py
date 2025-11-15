@@ -36,7 +36,7 @@ else:
     from PySide2.QtGui import QKeySequence
 
 from binaryninjaui import UIAction, UIActionHandler
-from binaryninjaui import DockHandler, DockContextHandler
+from binaryninjaui import DockContextHandler
 
 
 from .rsconfig import rs_log
