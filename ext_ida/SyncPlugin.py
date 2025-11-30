@@ -39,8 +39,8 @@ from retsync.syncrays import Syncrays
 import retsync.rsconfig as rsconfig
 from retsync.rsconfig import rs_encode, rs_decode, rs_log, rs_debug, load_configuration
 
-from PyQt5 import QtCore, QtWidgets
-from PyQt5.QtCore import QProcess, QProcessEnvironment
+from PySide6 import QtCore, QtWidgets
+from PySide6.QtCore import QProcess
 
 import idc
 import idaapi
@@ -818,11 +818,11 @@ class Broker(QtCore.QProcess):
                  'Read error', 'Write Error', 'Unknown Error')
 
     def cb_on_error(self, error):
-        rs_log("[-] broker error: %s" % Broker.QP_ERRORS[error])
+        rs_log("[-] broker error: %s" % Broker.QP_ERRORS[error.value])
 
     def cb_broker_on_state_change(self, new_state):
-        rs_debug("broker new state: %s" % Broker.QP_STATES[new_state])
-        if Broker.QP_STATES[new_state] == 'Not running':
+        rs_debug("broker new state: %s" % Broker.QP_STATES[new_state.value])
+        if Broker.QP_STATES[new_state.value] == 'Not running':
             if rsconfig.LOG_TO_FILE_ENABLE:
                 rs_log('    check tmp file retsync.<broker|dispatcher>.err if you think this is an error')
 
@@ -836,7 +836,7 @@ class Broker(QtCore.QProcess):
     def __init__(self, parser):
         QtCore.QProcess.__init__(self)
 
-        self.error.connect(self.cb_on_error)
+        self.errorOccurred.connect(self.cb_on_error)
         self.readyReadStandardOutput.connect(self.cb_broker_on_out)
         self.stateChanged.connect(self.cb_broker_on_state_change)
 
@@ -987,17 +987,15 @@ class SyncForm_t(PluginForm):
             modname = self.handle_name_aliasing()
             self.input.setText(modname)
 
-        cmdline = "\"%s\" -u \"%s\" --idb \"%s\"" % (
-                  PYTHON_PATH,
-                  BROKER_PATH,
-                  modname)
-        rs_log("cmdline: %s" % cmdline)
+        prog = PYTHON_PATH
+        args = ['-u', BROKER_PATH, "--idb", modname]
+        rs_log("cmdline: %s %s" % (prog, " ".join(args)))
 
         try:
             self.broker = Broker(self.parser)
             self.broker.started.connect(self.cb_broker_started)
             self.broker.finished.connect(self.cb_broker_finished)
-            self.broker.start(cmdline)
+            self.broker.start(prog, args)
         except Exception as e:
             rs_log("[-] failed to start broker: %s\n%s" % (str(e), traceback.format_exc()))
             return
@@ -1065,13 +1063,13 @@ class SyncForm_t(PluginForm):
 
     def cb_btn_restart(self):
         rs_log('restarting broker')
-        if self.cb_sync.checkState() == QtCore.Qt.Checked:
+        if self.cb_sync.checkState() == QtCore.Qt.Checked.value:
             self.cb_sync.toggle()
             time.sleep(0.1)
         self.cb_sync.toggle()
 
     def cb_change_state(self, state):
-        if state == QtCore.Qt.Checked:
+        if state == QtCore.Qt.Checked.value:
             rs_log("sync enabled")
             # Restart broker
             self.hotkeys_ctx = []
@@ -1083,7 +1081,7 @@ class SyncForm_t(PluginForm):
 
     def cb_hexrays_sync_state(self, state):
         if self.broker:
-            if state == QtCore.Qt.Checked:
+            if state == QtCore.Qt.Checked.value:
                 rs_log("hexrays sync enabled\n")
                 self.broker.worker.hexsync.enable()
             else:
