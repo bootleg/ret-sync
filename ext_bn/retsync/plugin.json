@@ -1,7 +1,7 @@
 {
     "pluginmetadataversion": 2,
     "name": "ret-sync",
-    "type": ["helper" ],
+    "type": ["sync" ],
     "api": ["python3"],
     "description": "Helper plugin to synchronize Binary Ninja with a debugging session",
     "longdescription": "This plugin is a part of ret-sync, a set of plugins that help to synchronize a debugging session (WinDbg/GDB/LLDB/OllyDbg/OllyDbg2/x64dbg) with a disassembler (IDA/Ghidra/Binary Ninja).",
