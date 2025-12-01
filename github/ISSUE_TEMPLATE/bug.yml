@@ -1,0 +1,75 @@
+name: Bug Report
+description: File a bug report.
+type: bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Also tell us, what did you expect to happen?
+      placeholder: Tell us what you see!
+      value: "A bug happened!"
+    validations:
+      required: true
+  - type: dropdown
+    id: debugger
+    attributes:
+      label: What debugger(s) are you seeing the problem on?
+      multiple: true
+      options:
+        - WinDbg
+        - gdb
+        - lldb
+        - x64dbg
+        - OllyDbg
+        - OllyDbg2
+        - Other (specify) 
+  - type: textarea
+    id: debugger-version
+    attributes:
+      label: Debugger version
+      description: What debugger(s) version?
+      value: "gdb 16.3? xdbg64 (snapshot_2025-08-19_19-40.zip)?" 
+    validations:
+      required: true
+  - type: textarea
+    id: debugger-logs
+    attributes:
+      label: Debugger log output 
+      description: Please copy and paste any relevant debugger log output. This will be automatically formatted into code, so no need for backticks.
+      render: shell
+  - type: dropdown
+    id: disass
+    attributes:
+      label: What disassembler(s) are you seeing the problem on?
+      multiple: true
+      options:
+        - IDA
+        - Ghidra 
+        - BinaryNinja
+        - Library
+        - Other (specify)
+  - type: textarea
+    id: disass-version
+    attributes:
+      label: Disassembler version
+      description: What disassembler(s) version?
+      value: "IDA 9.2? Ghidra 11.4.2?"
+    validations:
+      required: true
+  - type: textarea
+    id: disassembler-logs
+    attributes:
+      label: Disassembler log output 
+      description: Please copy and paste any relevant debugger log output. This will be automatically formatted into code, so no need for backticks.
+      render: shell
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks.
+      render: shell
