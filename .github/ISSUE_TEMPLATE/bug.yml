@@ -32,7 +32,7 @@ body:
     attributes:
       label: Debugger version
       description: What debugger(s) version?
-      value: "gdb 16.3? xdbg64 (snapshot_2025-08-19_19-40.zip)?" 
+      value: "gdb 16.3?\nxdbg64 (snapshot_2025-08-19_19-40.zip)?" 
     validations:
       required: true
   - type: textarea
@@ -57,7 +57,7 @@ body:
     attributes:
       label: Disassembler version
       description: What disassembler(s) version?
-      value: "IDA 9.2? Ghidra 11.4.2?"
+      value: "IDA 9.2?\nGhidra 11.4.2?"
     validations:
       required: true
   - type: textarea
@@ -66,3 +66,11 @@ body:
       label: Disassembler log output 
       description: Please copy and paste any relevant debugger log output. This will be automatically formatted into code, so no need for backticks.
       render: shell
+  - type: textarea
+    id: os-version
+    attributes:
+      label: Operating system versiom
+      description: What operating system(s) and version(s)? 
+      value: "Windows 11?\nUbuntu 24.04.3?\nmacOS 26.1?"
+    validations:
+      required: true
