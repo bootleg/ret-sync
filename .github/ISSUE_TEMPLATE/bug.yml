@@ -1,6 +1,5 @@
 name: Bug Report
-description: File a bug report.
-type: bug
+description: File a bug report. 
 body:
   - type: markdown
     attributes:
