@@ -40,7 +40,7 @@ static CRITICAL_SECTION g_CritSectPollRelease;
 // Debuggee's state;
 ULONG_PTR g_Offset = NULL;
 ULONG_PTR g_Base = NULL;
-REGDUMP regs;
+REGDUMP_AVX512 regs;
 
 // Synchronisation mode
 static BOOL g_SyncAuto = true;
