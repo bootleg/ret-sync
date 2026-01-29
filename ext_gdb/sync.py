@@ -804,7 +804,7 @@ class Rln(WrappedCommand):
             value = gdb.parse_and_eval(arg)
             if (str(value)) == 'void':
                 raise ValueError
-            raddr = int(str(value), 16)
+            raddr = int(value)
         except ValueError as e:
             rs_log("rln: failed to evaluate expression \"%s\"" % arg)
             rs_log("     hint: be careful of register name case ($RIP ->$rip, cf. info registers)")
