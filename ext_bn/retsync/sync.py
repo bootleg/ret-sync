@@ -31,9 +31,8 @@ else:
     from PySide2 import QtCore
     from PySide2.QtCore import Qt
 
-from binaryninjaui import DockHandler
 from binaryninjaui import UIAction, UIActionHandler, UIContext, UIContextNotification
-from binaryninjaui import ViewFrame
+from binaryninjaui import ViewFrame, Sidebar
 
 from binaryninja.plugin import BackgroundTaskThread, PluginCommand
 
@@ -52,7 +51,7 @@ from dataclasses import dataclass
 
 from .retsync import rsconfig as rsconfig
 from .retsync.rsconfig import rs_encode, rs_decode, rs_log, rs_debug, load_configuration
-from .retsync.rswidget import SyncDockWidget
+from .retsync.rswidget import SyncDockWidgetType
 
 
 class SyncHandler(object):
@@ -362,7 +361,7 @@ class ClientListenerTask(threading.Thread):
             rs_log('server started')
             asyncore.loop()
         except Exception as e:
-            rs_log('server initialization failed')
+            rs_log(f'server initialization failed: {e}')
             self.cancel()
             self.plugin.cmd_syncoff()
 
@@ -435,9 +434,10 @@ class ProgramManager(object):
 
     def list_dyn(self):
         self.opened = {}
-        dock = DockHandler.getActiveDockHandler()
-        view_frame = dock.getViewFrame()
-
+        ui_ctx = UIContext.activeContext()
+        view_frame = None
+        if ui_ctx:
+            view_frame = ui_ctx.getCurrentViewFrame()
         if view_frame:
             frames = view_frame.parent()
             for i in range(frames.count()):
@@ -479,10 +479,7 @@ class SyncPlugin(UIContextNotification):
         self.cb_trace_enabled = False
 
     def init_widget(self):
-        dock_handler = DockHandler.getActiveDockHandler()
-        parent = dock_handler.parent()
-        self.widget = SyncDockWidget.create_widget("ret-sync plugin", parent)
-        dock_handler.addDockWidget(self.widget, Qt.BottomDockWidgetArea, Qt.Horizontal, True, False)
+        Sidebar.addSidebarWidgetType(SyncDockWidgetType(self))
 
     def OnAfterOpenFile(self, context, file, frame):
         self.pgm_mgr.add(file.getRawData().file.original_filename)
@@ -524,8 +521,9 @@ class SyncPlugin(UIContextNotification):
             self.current_tab = None
 
     def bootstrap(self, dialect):
-        self.pgm_mgr.reset_bases()
-        self.widget.set_connected(dialect)
+        self.pgm_mgr.reset_bases() 
+        if self.widget:
+            self.widget.set_connected(dialect)
 
         if dialect in rsconfig.DBG_DIALECTS:
             self.dbg_dialect = rsconfig.DBG_DIALECTS[dialect]
@@ -535,14 +533,16 @@ class SyncPlugin(UIContextNotification):
         self.sync_enabled = False
         self.cb_trace_enabled = False
         self.current_pgm = None
-        self.widget.reset_client()
+        if self.widget:
+            self.widget.reset_client()
 
     def broadcast(self, msg):
         self.client.send(rs_encode(msg))
         rs_log(msg)
 
     def set_program(self, pgm):
-        self.widget.set_program(pgm)
+        if self.widget:
+            self.widget.set_program(pgm)
         if not self.pgm_mgr.exists(pgm):
             return
         self.sync_enabled = True
@@ -786,6 +786,7 @@ class SyncPlugin(UIContextNotification):
         if self.client_listener:
             self.client_listener.cancel()
             self.client_listener = None
-            self.widget.reset_status()
+            if self.widget:
+                self.widget.reset_status()
         else:
             rs_log('not listening')
